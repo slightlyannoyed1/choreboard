@@ -1,0 +1,10 @@
+{
+  "name": "choreboard-server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.3"
+  }
+}

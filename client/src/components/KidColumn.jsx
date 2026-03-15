@@ -1,0 +1,111 @@
+import { completeChore, uncompleteChore } from '../api'
+
+function burst(color) {
+  const canvas = document.createElement('canvas')
+  canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9999'
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight
+  document.body.appendChild(canvas)
+  const ctx = canvas.getContext('2d')
+  const palette = [color, '#FFD700', '#FF69B4', '#00CED1', '#ffffff']
+  const particles = Array.from({ length: 100 }, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height * 0.4,
+    vx: (Math.random() - 0.5) * 6,
+    vy: Math.random() * 4 + 1,
+    color: palette[Math.floor(Math.random() * palette.length)],
+    w: Math.random() * 10 + 6,
+    h: Math.random() * 6 + 4,
+    rot: Math.random() * Math.PI * 2,
+    rotV: (Math.random() - 0.5) * 0.15,
+  }))
+  let raf
+  const draw = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    let alive = false
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.rot += p.rotV
+      if (p.y < canvas.height + 20) alive = true
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot)
+      ctx.fillStyle = p.color
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h)
+      ctx.restore()
+    }
+    if (alive) raf = requestAnimationFrame(draw)
+    else { cancelAnimationFrame(raf); canvas.remove() }
+  }
+  draw()
+}
+
+export default function KidColumn({ kid, chores, awards, selectedDate, onRefresh, showToast }) {
+  const done = chores.filter(c => c.done)
+  const todo = chores.filter(c => !c.done)
+
+  const handleComplete = async (chore) => {
+    const res = await completeChore(chore.id, selectedDate)
+    if (res.ok) {
+      burst(kid.color)
+      showToast(`+${chore.points} pts for ${kid.name}!`)
+      onRefresh()
+    }
+  }
+
+  const handleUncomplete = async (chore) => {
+    const res = await uncompleteChore(chore.id, selectedDate)
+    if (res.ok) {
+      showToast(`-${chore.points} pts from ${kid.name}`)
+      onRefresh()
+    }
+  }
+
+  return (
+    <div style={{ background:'var(--cb-surface)', borderRadius:12, border:'1px solid var(--cb-border)', overflow:'hidden' }}>
+      <div style={{ padding:'18px 20px', background: kid.color + '22', borderBottom:'1px solid var(--cb-border)', display:'flex', alignItems:'center', gap:14 }}>
+        <div style={{ width:56, height:56, borderRadius:'50%', background: kid.color + '33', display:'flex', alignItems:'center', justifyContent:'center', fontSize:30, flexShrink:0 }}>{kid.emoji}</div>
+        <div>
+          <div style={{ fontSize:22, fontWeight:600, color:'var(--cb-text)' }}>{kid.name}</div>
+          <div style={{ fontSize:15, color:'var(--cb-text-sub)', marginTop:4 }}>
+            {done.length}/{chores.length} done &nbsp;
+            <span style={{ background: kid.color + '33', color: kid.color, padding:'3px 10px', borderRadius:20, fontSize:14, fontWeight:600 }}>{kid.points} pts</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding:'10px 12px 16px', display:'flex', flexDirection:'column', gap:8 }}>
+        {awards && awards.map(a => (
+          <div key={a.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:'var(--cb-award-bg)', border:'1px solid #7F77DD55', borderRadius:10 }}>
+            <span style={{ fontSize:26, flexShrink:0 }}>🏆</span>
+            <div>
+              <div style={{ fontSize:13, color:'#7F77DD', fontWeight:600, textTransform:'uppercase', letterSpacing:0.5 }}>Special Prize Awarded!</div>
+              <div style={{ fontSize:16, color:'var(--cb-text)', marginTop:2 }}>{a.reward_name}</div>
+            </div>
+          </div>
+        ))}
+
+        {todo.length > 0 && <div style={{ fontSize:12, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, padding:'6px 4px' }}>To do</div>}
+        {todo.map(chore => (
+          <div key={chore.id} onClick={() => handleComplete(chore)}
+            style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 16px', background:'var(--cb-surface2)', borderRadius:10, cursor:'pointer', border:'1px solid var(--cb-border)', userSelect:'none' }}>
+            <div style={{ width:36, height:36, borderRadius:'50%', border:`3px solid ${kid.color}66`, flexShrink:0 }} />
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:22, color:'var(--cb-text)', fontWeight:700 }}>{chore.name}</div>
+              <div style={{ fontSize:16, color:'var(--cb-text-muted)', marginTop:3 }}><span style={{ color: kid.color, fontWeight:700 }}>{chore.points} pts</span> · {chore.recurring}</div>
+            </div>
+          </div>
+        ))}
+
+        {done.length > 0 && <div style={{ fontSize:12, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, padding:'6px 4px' }}>Done</div>}
+        {done.map(chore => (
+          <div key={chore.id} onClick={() => handleUncomplete(chore)}
+            style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 16px', background:'var(--cb-surface2)', borderRadius:10, border:'1px solid var(--cb-border)', opacity:0.55, cursor:'pointer', userSelect:'none' }}>
+            <div style={{ width:36, height:36, borderRadius:'50%', background: kid.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, color:'#fff', flexShrink:0 }}>✓</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:22, color:'var(--cb-text-dim)', fontWeight:700, textDecoration:'line-through' }}>{chore.name}</div>
+              <div style={{ fontSize:16, color:'var(--cb-text-faint)', marginTop:3 }}>{chore.points} pts · {chore.recurring}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}

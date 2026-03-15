@@ -1,0 +1,20 @@
+services:
+  choreboard:
+    build: .
+    container_name: choreboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Data is stored here so it survives container restarts/updates.
+      # Change the left side to any path on your host, e.g.:
+      #   Unraid:  /mnt/user/appdata/choreboard:/app/data
+      #   Linux:   /opt/choreboard/data:/app/data
+      #   Windows: C:/choreboard/data:/app/data
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_PATH=/app/data/choreboard.db
+      # IMPORTANT: Change this to your own 4-digit PIN before deploying!
+      - ADMIN_PIN=1234

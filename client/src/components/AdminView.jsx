@@ -1,0 +1,283 @@
+import { useState, useEffect } from 'react'
+import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, deleteReward, acknowledgeRequest, updatePin, getAuditLog, updateTimezone } from '../api'
+
+const tzLabel = (tz) => {
+  const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
+    .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value ?? ''
+  return `${offset.replace('GMT', 'UTC')}  ${tz.replace(/_/g, ' ')}`
+}
+
+const TIMEZONES = [
+  { group: 'US & Canada', zones: ['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Phoenix','America/Anchorage','Pacific/Honolulu','America/Toronto','America/Vancouver'] },
+  { group: 'Europe',      zones: ['Europe/London','Europe/Paris','Europe/Berlin','Europe/Rome','Europe/Madrid','Europe/Stockholm','Europe/Moscow'] },
+  { group: 'Asia',        zones: ['Asia/Dubai','Asia/Kolkata','Asia/Bangkok','Asia/Shanghai','Asia/Tokyo','Asia/Seoul'] },
+  { group: 'Pacific',     zones: ['Australia/Sydney','Australia/Perth','Pacific/Auckland'] },
+]
+
+const EMOJIS = ['🦊','🦁','🐯','🐻','🐼','🐨','🦄','🐸','🐢','🐙','🦋','🐬','🦈','🐘','🦒','🦘','🦝','🦦','🐺','🦅','🐧','🦜','🦩','🦕','🦖','🐳','🦔','🐊','🦙','🐠']
+const COLORS = ['#7F77DD','#1D9E75','#D85A30','#D4537E','#378ADD','#639922','#BA7517','#E24B4A']
+
+export default function AdminView({ kids, allChores, rewards, requests, timezone, onTimezoneChange, onRefresh, showToast, setView }) {
+  const [tab, setTab] = useState('pending')
+  const [newKid, setNewKid] = useState({ name:'', emoji:'🦊', color:'#7F77DD' })
+  const [newChore, setNewChore] = useState({ kid_id:'', name:'', points:10, recurring:'daily' })
+  const [newReward, setNewReward] = useState({ name:'', points:50 })
+  const [editingKid, setEditingKid] = useState(null)
+  const [newPin, setNewPin] = useState('')
+  const [pinSaved, setPinSaved] = useState(false)
+  const [auditLog, setAuditLog] = useState([])
+
+  useEffect(() => {
+    if (tab === 'log') getAuditLog().then(setAuditLog)
+  }, [tab])
+
+  const addKid = async () => {
+    if (!newKid.name) return
+    await createKid(newKid); onRefresh(); showToast('Kid added!')
+    setNewKid({ name:'', emoji:'🦊', color:'#7F77DD' })
+  }
+
+  const saveKid = async () => {
+    if (!editingKid.name) return
+    await updateKid(editingKid.id, { name: editingKid.name, emoji: editingKid.emoji, color: editingKid.color })
+    onRefresh(); showToast('Saved!'); setEditingKid(null)
+  }
+
+  const addChore = async () => {
+    if (!newChore.kid_id || !newChore.name) return
+    await createChore(newChore); onRefresh(); showToast('Chore added!')
+    setNewChore({ kid_id:'', name:'', points:10, recurring:'daily' })
+  }
+
+  const addReward = async () => {
+    if (!newReward.name) return
+    await createReward(newReward); onRefresh(); showToast('Reward added!')
+    setNewReward({ name:'', points:50 })
+  }
+
+  const handleSavePin = async () => {
+    if (!/^\d{4}$/.test(newPin)) { showToast('PIN must be 4 digits'); return }
+    const res = await updatePin(newPin)
+    if (res.ok) { showToast('PIN updated!'); setPinSaved(true); setNewPin('') }
+    else showToast(res.error || 'Failed to update PIN')
+  }
+
+  const tabs = ['pending', 'kids', 'chores', 'rewards', 'settings', 'log']
+
+  return (
+    <div>
+      <div style={{ display:'flex', gap:0, padding:'0 16px', background:'var(--cb-header)', borderBottom:'1px solid var(--cb-border)', overflowX:'auto' }}>
+        {tabs.map(t => (
+          <div key={t} onClick={() => setTab(t)}
+            style={{ padding:'16px 20px', fontSize:17, fontWeight: tab===t?700:400, color: tab===t?'#7F77DD':'var(--cb-text-muted)', borderBottom:`3px solid ${tab===t?'#7F77DD':'transparent'}`, cursor:'pointer', textTransform:'capitalize', whiteSpace:'nowrap' }}>
+            {t}{t==='pending'&&requests.length>0?` (${requests.length})`:''}
+          </div>
+        ))}
+        <div style={{ marginLeft:'auto', padding:'10px 0', flexShrink:0 }}>
+          <button onClick={() => setView('board')} style={{ padding:'10px 22px', borderRadius:8, border:'1px solid var(--cb-border2)', background:'var(--cb-surface2)', color:'var(--cb-text-sub)', fontSize:16, fontWeight:600, cursor:'pointer' }}>Done</button>
+        </div>
+      </div>
+
+      <div style={{ padding:16 }}>
+
+        {tab === 'pending' && (
+          <div>
+            {requests.length === 0 && <div style={{ color:'var(--cb-text-dim)', fontSize:18 }}>No pending requests.</div>}
+            {requests.map(r => (
+              <div key={r.id} style={{ background:'var(--cb-surface2)', border:'1px solid #7F77DD44', borderRadius:12, padding:'18px 20px', marginBottom:12 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:12 }}>
+                  <span style={{ fontSize:30 }}>🏆</span>
+                  <div>
+                    <div style={{ fontSize:20, color:'var(--cb-text)', fontWeight:700 }}>{r.reward_name}</div>
+                    <div style={{ fontSize:16, color:'var(--cb-text-muted)', marginTop:2 }}>{r.kid_name} · {r.reward_points} pts</div>
+                  </div>
+                </div>
+                <button onClick={async()=>{await acknowledgeRequest(r.id);onRefresh();showToast('Prize handed out!')}}
+                  style={{ width:'100%', padding:'14px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:18, cursor:'pointer', fontWeight:700 }}>
+                  ✓ Got it — prize given
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'kids' && (
+          <div>
+            {kids.map(k => (
+              <div key={k.id}>
+                {editingKid?.id === k.id ? (
+                  <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, marginBottom:10, display:'flex', flexDirection:'column', gap:12 }}>
+                    <input value={editingKid.name} onChange={e=>setEditingKid({...editingKid,name:e.target.value})} placeholder="Name" style={inputStyle} />
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                      {EMOJIS.map(e=>(
+                        <button key={e} onClick={()=>setEditingKid({...editingKid,emoji:e})}
+                          style={{ fontSize:28, background: editingKid.emoji===e?'var(--cb-border2)':'transparent', border:`1px solid ${editingKid.emoji===e?'var(--cb-text-muted)':'transparent'}`, borderRadius:8, padding:'6px 8px', cursor:'pointer' }}>{e}</button>
+                      ))}
+                    </div>
+                    <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                      {COLORS.map(c=>(
+                        <div key={c} onClick={()=>setEditingKid({...editingKid,color:c})}
+                          style={{ width:36, height:36, borderRadius:'50%', background:c, cursor:'pointer', outline: editingKid.color===c?`3px solid ${c}`:'none', outlineOffset:3 }} />
+                      ))}
+                    </div>
+                    <div style={{ display:'flex', gap:10 }}>
+                      <button onClick={saveKid} style={{ ...addBtnStyle, flex:1 }}>Save</button>
+                      <button onClick={()=>setEditingKid(null)} style={{ flex:1, padding:'12px 0', background:'var(--cb-border)', border:'none', borderRadius:8, color:'var(--cb-text-sub)', fontSize:17, cursor:'pointer' }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:12, padding:'16px 20px', marginBottom:10, gap:14 }}>
+                    <span style={{ fontSize:28 }}>{k.emoji}</span>
+                    <span style={{ flex:1, fontSize:20, color:'var(--cb-text)', fontWeight:600 }}>{k.name}</span>
+                    <span style={{ fontSize:17, color:'#7F77DD', fontWeight:600, marginRight:10 }}>{k.points} pts</span>
+                    <button onClick={()=>setEditingKid({id:k.id,name:k.name,emoji:k.emoji,color:k.color})}
+                      style={{ background:'none', border:'none', color:'#7F77DD', cursor:'pointer', fontSize:22, padding:'0 8px' }}>✎</button>
+                    <button onClick={async()=>{await deleteKid(k.id);onRefresh()}}
+                      style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22, padding:'0 8px' }}>&#x2715;</button>
+                  </div>
+                )}
+              </div>
+            ))}
+            <div style={{ marginTop:18, background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Add kid</div>
+              <input value={newKid.name} onChange={e=>setNewKid({...newKid,name:e.target.value})} placeholder="Name" style={inputStyle} />
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                {EMOJIS.map(e=>(
+                  <button key={e} onClick={()=>setNewKid({...newKid,emoji:e})}
+                    style={{ fontSize:28, background: newKid.emoji===e?'var(--cb-border2)':'transparent', border:`1px solid ${newKid.emoji===e?'var(--cb-text-muted)':'transparent'}`, borderRadius:8, padding:'6px 8px', cursor:'pointer' }}>{e}</button>
+                ))}
+              </div>
+              <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                {COLORS.map(c=>(
+                  <div key={c} onClick={()=>setNewKid({...newKid,color:c})}
+                    style={{ width:36, height:36, borderRadius:'50%', background:c, cursor:'pointer', outline: newKid.color===c?`3px solid ${c}`:'none', outlineOffset:3 }} />
+                ))}
+              </div>
+              <button onClick={addKid} style={addBtnStyle}>Add Kid</button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'chores' && (
+          <div>
+            {kids.map(kid => (
+              <div key={kid.id} style={{ marginBottom:24 }}>
+                <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>{kid.emoji} {kid.name}</div>
+                {allChores.filter(c=>c.kid_id===kid.id).map(c=>(
+                  <div key={c.id} style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:10, padding:'14px 18px', marginBottom:8 }}>
+                    <span style={{ flex:1, fontSize:18, color:'var(--cb-text)', fontWeight:600 }}>{c.name}</span>
+                    <span style={{ fontSize:15, color:'var(--cb-text-muted)', marginRight:16 }}>{c.points}pts · {c.recurring}</span>
+                    <button onClick={async()=>{await deleteChore(c.id);onRefresh()}}
+                      style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22 }}>&#x2715;</button>
+                  </div>
+                ))}
+                {allChores.filter(c=>c.kid_id===kid.id).length === 0 && (
+                  <div style={{ fontSize:16, color:'var(--cb-text-faint)', padding:'8px 0' }}>No chores yet.</div>
+                )}
+              </div>
+            ))}
+            <div style={{ marginTop:8, background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Add chore</div>
+              <select value={newChore.kid_id} onChange={e=>setNewChore({...newChore,kid_id:e.target.value})} style={inputStyle}>
+                <option value=''>Select kid</option>
+                {kids.map(k=><option key={k.id} value={k.id}>{k.emoji} {k.name}</option>)}
+              </select>
+              <input value={newChore.name} onChange={e=>setNewChore({...newChore,name:e.target.value})} placeholder="Chore name" style={inputStyle} />
+              <div style={{ display:'flex', gap:10 }}>
+                <input type="number" value={newChore.points} onChange={e=>setNewChore({...newChore,points:parseInt(e.target.value)||0})} style={{...inputStyle, width:100}} />
+                <select value={newChore.recurring} onChange={e=>setNewChore({...newChore,recurring:e.target.value})} style={{...inputStyle, flex:1}}>
+                  <option value='daily'>Daily</option>
+                  <option value='weekdays'>Weekdays</option>
+                  <option value='weekly'>Weekly (Mon)</option>
+                </select>
+              </div>
+              <button onClick={addChore} style={addBtnStyle}>Add Chore</button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'rewards' && (
+          <div>
+            {rewards.map(r=>(
+              <div key={r.id} style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:12, padding:'16px 20px', marginBottom:10 }}>
+                <span style={{ flex:1, fontSize:20, color:'var(--cb-text)', fontWeight:600 }}>{r.name}</span>
+                <span style={{ fontSize:18, color:'#7F77DD', fontWeight:700, marginRight:16 }}>{r.points} pts</span>
+                <button onClick={async()=>{await deleteReward(r.id);onRefresh()}}
+                  style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22 }}>&#x2715;</button>
+              </div>
+            ))}
+            <div style={{ marginTop:18, background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Add reward</div>
+              <input value={newReward.name} onChange={e=>setNewReward({...newReward,name:e.target.value})} placeholder="Reward name" style={inputStyle} />
+              <input type="number" value={newReward.points} onChange={e=>setNewReward({...newReward,points:parseInt(e.target.value)||0})} placeholder="Points cost" style={inputStyle} />
+              <button onClick={addReward} style={addBtnStyle}>Add Reward</button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'log' && (
+          <div>
+            <div style={{ fontSize:15, color:'var(--cb-text-faint)', marginBottom:14 }}>Past 30 days · {auditLog.length} entries</div>
+            {auditLog.length === 0 && <div style={{ color:'var(--cb-text-dim)', fontSize:18 }}>No activity yet.</div>}
+            {auditLog.map(entry => {
+              const d = new Date(entry.created_at)
+              const opts = { timeZone: timezone }
+              const todayStr = new Date().toLocaleDateString('en-US', opts)
+              const entryStr = d.toLocaleDateString('en-US', opts)
+              const yesterdayStr = new Date(Date.now() - 86400000).toLocaleDateString('en-US', opts)
+              const isToday = entryStr === todayStr
+              const isYesterday = entryStr === yesterdayStr
+              const time = d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', timeZone: timezone })
+              const dateLabel = isToday ? `Today ${time}` : isYesterday ? `Yesterday ${time}` : d.toLocaleDateString('en-US', { month:'short', day:'numeric', timeZone: timezone }) + ' ' + time
+              const icon = entry.type === 'chore_complete' ? '✓' : entry.type === 'chore_uncomplete' ? '↩' : '🏆'
+              const iconColor = entry.type === 'chore_complete' ? '#1D9E75' : entry.type === 'chore_uncomplete' ? 'var(--cb-text-muted)' : '#7F77DD'
+              return (
+                <div key={entry.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 18px', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:10, marginBottom:7 }}>
+                  <span style={{ fontSize:18, color:iconColor, width:22, textAlign:'center', flexShrink:0 }}>{icon}</span>
+                  <span style={{ fontSize:16, color:'var(--cb-text-sub)', minWidth:110, flexShrink:0, fontWeight:600 }}>{entry.kid_name}</span>
+                  <span style={{ flex:1, fontSize:16, color:'var(--cb-text)' }}>{entry.description}</span>
+                  <span style={{ fontSize:16, fontWeight:700, color: entry.points > 0 ? '#1D9E75' : '#E24B4A', whiteSpace:'nowrap' }}>
+                    {entry.points > 0 ? '+' : ''}{entry.points} pts
+                  </span>
+                  <span style={{ fontSize:13, color:'var(--cb-text-faint)', whiteSpace:'nowrap', marginLeft:8 }}>{dateLabel}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {tab === 'settings' && (
+          <div>
+            <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14 }}>
+              <div style={{ fontSize:18, color:'var(--cb-text-sub)', fontWeight:700 }}>Timezone</div>
+              <select value={timezone} onChange={async e => {
+                const tz = e.target.value
+                const res = await updateTimezone(tz)
+                if (res.ok) { onTimezoneChange(tz); showToast('Timezone updated!') }
+              }} style={inputStyle}>
+                {TIMEZONES.map(group => (
+                  <optgroup key={group.group} label={group.group}>
+                    {group.zones.map(z => <option key={z} value={z}>{tzLabel(z)}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14, marginTop:14 }}>
+              <div style={{ fontSize:18, color:'var(--cb-text-sub)', fontWeight:700 }}>Change Admin PIN</div>
+              <input type="text" inputMode="numeric" maxLength={4} value={newPin}
+                onChange={e => { setPinSaved(false); setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4)) }}
+                placeholder="New 4-digit PIN" style={inputStyle} />
+              {pinSaved && <div style={{ fontSize:16, color:'#1D9E75' }}>PIN updated successfully.</div>}
+              <button onClick={handleSavePin} style={addBtnStyle}>Save PIN</button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  )
+}
+
+const inputStyle = { padding:'13px 14px', background:'var(--cb-input-bg)', border:'1px solid var(--cb-border2)', borderRadius:8, color:'var(--cb-text)', fontSize:17, width:'100%', boxSizing:'border-box' }
+const addBtnStyle = { padding:'14px 0', background:'#7F77DD', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }
