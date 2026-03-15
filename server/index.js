@@ -64,6 +64,34 @@ app.get('/api/shoutouts', (req, res) => {
   res.json(rows)
 })
 
+app.get('/api/shoutouts/pending', (_req, res) => {
+  const rows = db.prepare(`
+    SELECT ks.*, k.name as kid_name, k.emoji as kid_emoji, k.color as kid_color
+    FROM kid_shoutouts ks
+    JOIN kids k ON k.id = ks.kid_id
+    WHERE ks.awarded = 0
+      AND ks.shoutout_date >= date('now', '-7 days')
+    ORDER BY ks.created_at DESC
+  `).all()
+  res.json(rows)
+})
+
+app.post('/api/shoutouts/:id/award', (req, res) => {
+  const { points } = req.body
+  const val = parseInt(points)
+  if (!val || val < 1) return res.status(400).json({ error: 'Invalid points' })
+  const shoutout = db.prepare('SELECT * FROM kid_shoutouts WHERE id=?').get(req.params.id)
+  if (!shoutout) return res.status(404).json({ error: 'Not found' })
+  if (shoutout.awarded) return res.status(400).json({ error: 'Already awarded' })
+  const kid = db.prepare('SELECT * FROM kids WHERE id=?').get(shoutout.kid_id)
+  if (!kid) return res.status(404).json({ error: 'Kid not found' })
+  db.prepare('UPDATE kid_shoutouts SET awarded=1, awarded_points=? WHERE id=?').run(val, shoutout.id)
+  db.prepare('UPDATE kids SET points=points+? WHERE id=?').run(val, shoutout.kid_id)
+  db.prepare('INSERT INTO audit_log (kid_id, kid_name, type, description, points) VALUES (?, ?, ?, ?, ?)')
+    .run(shoutout.kid_id, kid.name, 'points_added', `Shoutout: ${shoutout.description}`, val)
+  res.json({ ok: true })
+})
+
 app.post('/api/shoutouts', (req, res) => {
   const { kid_id, description, date } = req.body
   if (!kid_id || !description || !description.trim()) return res.status(400).json({ error: 'Missing fields' })

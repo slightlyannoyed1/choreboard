@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateTextSize, adjustKidPoints } from '../api'
+import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateTextSize, adjustKidPoints, awardShoutout } from '../api'
 
 const tzLabel = (tz) => {
   const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
@@ -19,7 +19,7 @@ const COLORS = ['#7F77DD','#1D9E75','#D85A30','#D4537E','#378ADD','#639922','#BA
 
 const TEXT_SIZES = ['small', 'medium', 'large', 'big']
 
-export default function AdminView({ kids, allChores, rewards, requests, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, textSize, onTextSizeChange, onRefresh, showToast, setView }) {
+export default function AdminView({ kids, allChores, rewards, requests, pendingShoutouts, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, textSize, onTextSizeChange, onRefresh, showToast, setView }) {
   const [tab, setTab] = useState('pending')
   const [newKid, setNewKid] = useState({ name:'', emoji:'🦊', color:'#7F77DD' })
   const [newChore, setNewChore] = useState({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6' })
@@ -29,6 +29,7 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
   const [newPin, setNewPin] = useState('')
   const [pinSaved, setPinSaved] = useState(false)
   const [auditLog, setAuditLog] = useState([])
+  const [shoutoutPoints, setShoutoutPoints] = useState({})
 
   useEffect(() => {
     if (tab === 'log') getAuditLog().then(setAuditLog)
@@ -91,8 +92,9 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
       <div style={{ display:'flex', gap:0, padding:'0 16px', background:'var(--cb-header)', borderBottom:'1px solid var(--cb-border)', overflowX:'auto' }}>
         {tabs.map(t => (
           <div key={t} onClick={() => setTab(t)}
-            style={{ padding:'16px 20px', fontSize:17, fontWeight: tab===t?700:400, color: tab===t?'#7F77DD':'var(--cb-text-muted)', borderBottom:`3px solid ${tab===t?'#7F77DD':'transparent'}`, cursor:'pointer', textTransform:'capitalize', whiteSpace:'nowrap' }}>
+            style={{ padding:'16px 20px', fontSize:17, fontWeight: tab===t?700:400, color: tab===t?'#7F77DD':'var(--cb-text-muted)', borderBottom:`3px solid ${tab===t?'#7F77DD':'transparent'}`, cursor:'pointer', textTransform:'capitalize', whiteSpace:'nowrap', position:'relative' }}>
             {t}{t==='pending'&&requests.length>0?` (${requests.length})`:''}
+            {t==='points'&&pendingShoutouts.length>0&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
           </div>
         ))}
         <div style={{ marginLeft:'auto', padding:'10px 0', flexShrink:0 }}>
@@ -239,31 +241,84 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
         )}
 
         {tab === 'points' && (
-          <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:14 }}>
-            <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Select kid</div>
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-              {kids.map(k => {
-                const active = pointsKidId === String(k.id)
-                return (
-                  <button key={k.id} type="button" onClick={() => setPointsKidId(String(k.id))}
-                    style={{ padding:'10px 14px', borderRadius:8, border:'none', background: active?'#7F77DD':'var(--cb-border)', color: active?'#ffffff':'var(--cb-text-faint)', fontSize:15, fontWeight:700, cursor:'pointer', opacity: active?1:0.5 }}>
-                    {k.emoji} {k.name}
-                    <span style={{ marginLeft:8, fontWeight:400, opacity: active?1:0.7 }}>{k.points} pts</span>
-                  </button>
-                )
-              })}
-            </div>
-            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              <input type="number" value={pointsDelta} min={1} onChange={e=>setPointsDelta(Math.abs(parseInt(e.target.value)||0))}
-                style={{...inputStyle, width:100}} />
-              <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points</span>
-            </div>
-            <input value={pointsReason} onChange={e=>setPointsReason(e.target.value)} placeholder="Reason (optional)" style={inputStyle} />
-            <div style={{ display:'flex', gap:10 }}>
-              <button onClick={() => applyPoints(1)}
-                style={{ flex:1, padding:'14px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>+ Add Points</button>
-              <button onClick={() => applyPoints(-1)}
-                style={{ flex:1, padding:'14px 0', background:'#E24B4A', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>- Remove Points</button>
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            {/* Kid shoutout review */}
+            {pendingShoutouts.length > 0 && (() => {
+              const kidIdsWithShoutouts = [...new Set(pendingShoutouts.map(s => s.kid_id))]
+              const selectedKidShoutouts = pointsKidId ? pendingShoutouts.filter(s => s.kid_id === parseInt(pointsKidId)) : []
+              return (
+                <div style={{ background:'var(--cb-surface2)', border:'1px solid #7F77DD44', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:12 }}>
+                  <div style={{ fontSize:17, color:'#7F77DD', fontWeight:700 }}>⭐ Shoutouts to review</div>
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                    {kids.filter(k => kidIdsWithShoutouts.includes(k.id)).map(k => {
+                      const active = pointsKidId === String(k.id)
+                      const count = pendingShoutouts.filter(s => s.kid_id === k.id).length
+                      return (
+                        <button key={k.id} onClick={() => setPointsKidId(String(k.id))}
+                          style={{ padding:'8px 14px', borderRadius:8, border:`2px solid ${active?'#7F77DD':'var(--cb-border2)'}`, background: active?'#7F77DD':'var(--cb-surface)', color: active?'#fff':'var(--cb-text)', fontSize:15, fontWeight:600, cursor:'pointer', position:'relative' }}>
+                          {k.emoji} {k.name}
+                          <span style={{ marginLeft:6, background:'#E24B4A', color:'#fff', borderRadius:10, fontSize:12, fontWeight:700, padding:'1px 6px' }}>{count}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {selectedKidShoutouts.length > 0 && (
+                    <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:4 }}>
+                      {selectedKidShoutouts.map(s => {
+                        const pts = shoutoutPoints[s.id] ?? defaultPoints
+                        return (
+                          <div key={s.id} style={{ display:'flex', alignItems:'center', gap:10, background:'var(--cb-surface)', border:'1px solid var(--cb-border)', borderRadius:10, padding:'12px 14px' }}>
+                            <span style={{ fontSize:18, flexShrink:0 }}>⭐</span>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:16, color:'var(--cb-text)', fontWeight:500 }}>{s.description}</div>
+                              <div style={{ fontSize:13, color:'var(--cb-text-faint)', marginTop:2 }}>{s.shoutout_date}</div>
+                            </div>
+                            <input type="number" min={1} value={pts}
+                              onChange={e => setShoutoutPoints(p => ({ ...p, [s.id]: Math.abs(parseInt(e.target.value)||0) }))}
+                              style={{ ...inputStyle, width:72, padding:'6px 8px', textAlign:'center' }} />
+                            <span style={{ fontSize:14, color:'var(--cb-text-muted)', flexShrink:0 }}>pts</span>
+                            <button onClick={async () => {
+                              const res = await awardShoutout(s.id, pts)
+                              if (res.ok) { onRefresh(); showToast(`+${pts} pts awarded!`) }
+                            }} style={{ padding:'8px 14px', borderRadius:8, border:'none', background:'#1D9E75', color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer', flexShrink:0 }}>Award</button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* Manual points adjustment */}
+            <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:14 }}>
+              <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Manual adjustment</div>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {kids.map(k => {
+                  const active = pointsKidId === String(k.id)
+                  const hasPending = pendingShoutouts.some(s => s.kid_id === k.id)
+                  return (
+                    <button key={k.id} type="button" onClick={() => setPointsKidId(String(k.id))}
+                      style={{ padding:'10px 14px', borderRadius:8, border:'none', background: active?'#7F77DD':'var(--cb-border)', color: active?'#ffffff':'var(--cb-text-faint)', fontSize:15, fontWeight:700, cursor:'pointer', opacity: active?1:0.6, position:'relative' }}>
+                      {k.emoji} {k.name}
+                      <span style={{ marginLeft:8, fontWeight:400, opacity: active?1:0.7 }}>{k.points} pts</span>
+                      {hasPending && <span style={{ position:'absolute', top:4, right:4, width:7, height:7, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
+                    </button>
+                  )
+                })}
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <input type="number" value={pointsDelta} min={1} onChange={e=>setPointsDelta(Math.abs(parseInt(e.target.value)||0))}
+                  style={{...inputStyle, width:100}} />
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points</span>
+              </div>
+              <input value={pointsReason} onChange={e=>setPointsReason(e.target.value)} placeholder="Reason (optional)" style={inputStyle} />
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={() => applyPoints(1)}
+                  style={{ flex:1, padding:'14px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>+ Add Points</button>
+                <button onClick={() => applyPoints(-1)}
+                  style={{ flex:1, padding:'14px 0', background:'#E24B4A', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>- Remove Points</button>
+              </div>
             </div>
           </div>
         )}

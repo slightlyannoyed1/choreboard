@@ -145,11 +145,10 @@ export default function KidColumn({ kid, chores, awards, shoutouts, selectedDate
               <div key={s.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background: kid.color + '11', border:`1px solid ${kid.color}33`, borderRadius:10 }}>
                 <span style={{ fontSize:22, flexShrink:0 }}>⭐</span>
                 <div style={{ flex:1, fontSize:16, color:'var(--cb-text)', fontWeight:500 }}>{s.description}</div>
-                <button
-                  onClick={() => handleDeleteShoutout(s.id)}
-                  title="Remove"
-                  style={{ background:'none', border:'none', color:'var(--cb-text-faint)', fontSize:16, cursor:'pointer', padding:'0 4px', lineHeight:1, flexShrink:0 }}
-                >×</button>
+                {s.awarded_points > 0
+                  ? <span style={{ background: kid.color + '33', color: kid.color, padding:'3px 10px', borderRadius:20, fontSize:14, fontWeight:700, flexShrink:0 }}>+{s.awarded_points} pts</span>
+                  : <button onClick={() => handleDeleteShoutout(s.id)} title="Remove" style={{ background:'none', border:'none', color:'var(--cb-text-faint)', fontSize:16, cursor:'pointer', padding:'0 4px', lineHeight:1, flexShrink:0 }}>×</button>
+                }
               </div>
             ))}
           </>

@@ -78,6 +78,9 @@ db.exec(`
 
 // Migrate: add acknowledged column if not present
 try { db.exec('ALTER TABLE redemption_requests ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0') } catch(_) {}
+// Migrate: add shoutout award columns if not present
+try { db.exec('ALTER TABLE kid_shoutouts ADD COLUMN awarded INTEGER NOT NULL DEFAULT 0') } catch(_) {}
+try { db.exec('ALTER TABLE kid_shoutouts ADD COLUMN awarded_points INTEGER DEFAULT NULL') } catch(_) {}
 
 // Seed admin PIN from env var on first run
 const existingPin = db.prepare('SELECT value FROM settings WHERE key=?').get('admin_pin')
