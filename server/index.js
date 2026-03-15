@@ -30,7 +30,8 @@ app.put('/api/pin', (req, res) => {
 app.get('/api/settings', (_req, res) => {
   const tz = db.prepare('SELECT value FROM settings WHERE key=?').get('timezone')
   const dp = db.prepare('SELECT value FROM settings WHERE key=?').get('default_points')
-  res.json({ timezone: tz ? tz.value : 'America/New_York', default_points: dp ? parseInt(dp.value) : 10 })
+  const ts = db.prepare('SELECT value FROM settings WHERE key=?').get('text_size')
+  res.json({ timezone: tz ? tz.value : 'America/New_York', default_points: dp ? parseInt(dp.value) : 10, text_size: ts ? ts.value : 'medium' })
 })
 
 app.put('/api/settings/default-points', (req, res) => {
@@ -41,12 +42,38 @@ app.put('/api/settings/default-points', (req, res) => {
   res.json({ ok: true })
 })
 
+app.put('/api/settings/text-size', (req, res) => {
+  const { size } = req.body
+  if (!['small', 'medium', 'large', 'big'].includes(size)) return res.status(400).json({ error: 'Invalid size' })
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('text_size', size)
+  res.json({ ok: true })
+})
+
 app.put('/api/settings/timezone', (req, res) => {
   const { timezone } = req.body
   try { Intl.DateTimeFormat(undefined, { timeZone: timezone }) } catch {
     return res.status(400).json({ error: 'Invalid timezone' })
   }
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('timezone', timezone)
+  res.json({ ok: true })
+})
+
+app.get('/api/shoutouts', (req, res) => {
+  const date = req.query.date || new Date().toISOString().slice(0, 10)
+  const rows = db.prepare('SELECT * FROM kid_shoutouts WHERE shoutout_date=? ORDER BY created_at ASC').all(date)
+  res.json(rows)
+})
+
+app.post('/api/shoutouts', (req, res) => {
+  const { kid_id, description, date } = req.body
+  if (!kid_id || !description || !description.trim()) return res.status(400).json({ error: 'Missing fields' })
+  const shoutout_date = date || new Date().toISOString().slice(0, 10)
+  const result = db.prepare('INSERT INTO kid_shoutouts (kid_id, description, shoutout_date) VALUES (?, ?, ?)').run(kid_id, description.trim(), shoutout_date)
+  res.json({ ok: true, id: result.lastInsertRowid })
+})
+
+app.delete('/api/shoutouts/:id', (req, res) => {
+  db.prepare('DELETE FROM kid_shoutouts WHERE id=?').run(req.params.id)
   res.json({ ok: true })
 })
 

@@ -1,4 +1,5 @@
-import { completeChore, uncompleteChore } from '../api'
+import { useState } from 'react'
+import { completeChore, uncompleteChore, createShoutout, deleteShoutout } from '../api'
 
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 function recurringLabel(recurring) {
@@ -48,7 +49,10 @@ function burst(color) {
   draw()
 }
 
-export default function KidColumn({ kid, chores, awards, selectedDate, onRefresh, showToast }) {
+export default function KidColumn({ kid, chores, awards, shoutouts, selectedDate, onRefresh, showToast }) {
+  const [adding, setAdding] = useState(false)
+  const [text, setText] = useState('')
+
   const done = chores.filter(c => c.done)
   const todo = chores.filter(c => !c.done)
 
@@ -69,18 +73,59 @@ export default function KidColumn({ kid, chores, awards, selectedDate, onRefresh
     }
   }
 
+  const handleAddShoutout = async () => {
+    if (!text.trim()) return
+    await createShoutout({ kid_id: kid.id, description: text.trim(), date: selectedDate })
+    setText('')
+    setAdding(false)
+    onRefresh()
+  }
+
+  const handleDeleteShoutout = async (id) => {
+    await deleteShoutout(id)
+    onRefresh()
+  }
+
   return (
     <div style={{ background:'var(--cb-surface)', borderRadius:12, border:'1px solid var(--cb-border)', overflow:'hidden' }}>
       <div style={{ padding:'18px 20px', background: kid.color + '22', borderBottom:'1px solid var(--cb-border)', display:'flex', alignItems:'center', gap:14 }}>
         <div style={{ width:56, height:56, borderRadius:'50%', background: kid.color + '33', display:'flex', alignItems:'center', justifyContent:'center', fontSize:30, flexShrink:0 }}>{kid.emoji}</div>
-        <div>
+        <div style={{ flex:1 }}>
           <div style={{ fontSize:22, fontWeight:600, color:'var(--cb-text)' }}>{kid.name}</div>
           <div style={{ fontSize:15, color:'var(--cb-text-sub)', marginTop:4 }}>
             {done.length}/{chores.length} done &nbsp;
             <span style={{ background: kid.color + '33', color: kid.color, padding:'3px 10px', borderRadius:20, fontSize:14, fontWeight:600 }}>{kid.points} pts</span>
           </div>
         </div>
+        <button
+          onClick={() => { setAdding(v => !v); setText('') }}
+          title="Add a shoutout"
+          style={{ width:36, height:36, borderRadius:'50%', border:`2px solid ${kid.color}`, background: adding ? kid.color : 'transparent', color: adding ? '#fff' : kid.color, fontSize:26, lineHeight:1, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, padding:0 }}
+        >+</button>
       </div>
+
+      {adding && (
+        <div style={{ padding:'10px 12px', background:'var(--cb-surface2)', borderBottom:'1px solid var(--cb-border)' }}>
+          <input
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddShoutout(); if (e.key === 'Escape') { setAdding(false); setText('') } }}
+            placeholder={`What did you do, ${kid.name}? ⭐`}
+            autoFocus
+            style={{ width:'100%', padding:'10px 12px', borderRadius:8, border:'1px solid var(--cb-border)', background:'var(--cb-surface)', color:'var(--cb-text)', fontSize:15, boxSizing:'border-box', outline:'none' }}
+          />
+          <div style={{ display:'flex', gap:8, marginTop:6, justifyContent:'flex-end' }}>
+            <button
+              onClick={() => { setAdding(false); setText('') }}
+              style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--cb-border)', background:'transparent', color:'var(--cb-text-sub)', fontSize:14, cursor:'pointer' }}
+            >Cancel</button>
+            <button
+              onClick={handleAddShoutout}
+              style={{ padding:'7px 16px', borderRadius:8, border:'none', background: kid.color, color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer' }}
+            >Add</button>
+          </div>
+        </div>
+      )}
 
       <div style={{ padding:'10px 12px 16px', display:'flex', flexDirection:'column', gap:8 }}>
         {awards && awards.map(a => (
@@ -92,6 +137,23 @@ export default function KidColumn({ kid, chores, awards, selectedDate, onRefresh
             </div>
           </div>
         ))}
+
+        {shoutouts && shoutouts.length > 0 && (
+          <>
+            <div style={{ fontSize:12, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, padding:'6px 4px' }}>Shoutouts</div>
+            {shoutouts.map(s => (
+              <div key={s.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background: kid.color + '11', border:`1px solid ${kid.color}33`, borderRadius:10 }}>
+                <span style={{ fontSize:22, flexShrink:0 }}>⭐</span>
+                <div style={{ flex:1, fontSize:16, color:'var(--cb-text)', fontWeight:500 }}>{s.description}</div>
+                <button
+                  onClick={() => handleDeleteShoutout(s.id)}
+                  title="Remove"
+                  style={{ background:'none', border:'none', color:'var(--cb-text-faint)', fontSize:16, cursor:'pointer', padding:'0 4px', lineHeight:1, flexShrink:0 }}
+                >×</button>
+              </div>
+            ))}
+          </>
+        )}
 
         {todo.length > 0 && <div style={{ fontSize:12, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, padding:'6px 4px' }}>To do</div>}
         {todo.map(chore => (

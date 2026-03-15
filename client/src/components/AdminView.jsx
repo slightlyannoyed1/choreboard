@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, adjustKidPoints } from '../api'
+import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateTextSize, adjustKidPoints } from '../api'
 
 const tzLabel = (tz) => {
   const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
@@ -17,7 +17,9 @@ const TIMEZONES = [
 const EMOJIS = ['🦊','🦁','🐯','🐻','🐼','🐨','🦄','🐸','🐢','🐙','🦋','🐬','🦈','🐘','🦒','🦘','🦝','🦦','🐺','🦅','🐧','🦜','🦩','🦕','🦖','🐳','🦔','🐊','🦙','🐠']
 const COLORS = ['#7F77DD','#1D9E75','#D85A30','#D4537E','#378ADD','#639922','#BA7517','#E24B4A']
 
-export default function AdminView({ kids, allChores, rewards, requests, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, onRefresh, showToast, setView }) {
+const TEXT_SIZES = ['small', 'medium', 'large', 'big']
+
+export default function AdminView({ kids, allChores, rewards, requests, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, textSize, onTextSizeChange, onRefresh, showToast, setView }) {
   const [tab, setTab] = useState('pending')
   const [newKid, setNewKid] = useState({ name:'', emoji:'🦊', color:'#7F77DD' })
   const [newChore, setNewChore] = useState({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6' })
@@ -363,6 +365,20 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
                   }}
                   style={{...inputStyle, width:100}} />
                 <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>points (used when creating chores or adjusting points)</span>
+              </div>
+            </div>
+
+            <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14, marginTop:14 }}>
+              <div style={{ fontSize:18, color:'var(--cb-text-sub)', fontWeight:700 }}>Text Size</div>
+              <div style={{ display:'flex', gap:8 }}>
+                {TEXT_SIZES.map(size => (
+                  <button key={size} onClick={async () => {
+                    const res = await updateTextSize(size)
+                    if (res.ok) { onTextSizeChange(size); showToast(`Text size: ${size}`) }
+                  }} style={{ flex:1, padding:'10px 0', borderRadius:8, border:`2px solid ${textSize === size ? '#7F77DD' : 'var(--cb-border2)'}`, background: textSize === size ? '#7F77DD' : 'var(--cb-surface)', color: textSize === size ? '#fff' : 'var(--cb-text-sub)', fontSize:15, fontWeight:600, cursor:'pointer', textTransform:'capitalize' }}>
+                    {size}
+                  </button>
+                ))}
               </div>
             </div>
 

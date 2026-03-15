@@ -65,6 +65,15 @@ db.exec(`
     FOREIGN KEY (kid_id) REFERENCES kids(id),
     FOREIGN KEY (reward_id) REFERENCES rewards(id)
   );
+
+  CREATE TABLE IF NOT EXISTS kid_shoutouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kid_id INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    shoutout_date TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (kid_id) REFERENCES kids(id)
+  );
 `)
 
 // Migrate: add acknowledged column if not present

@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import Board from './components/Board'
 import RewardsView from './components/RewardsView'
 import AdminView from './components/AdminView'
-import { getKids, getChores, getAllChores, getRewards, getRequests, verifyPin, getSettings } from './api'
+import { getKids, getChores, getAllChores, getRewards, getRequests, verifyPin, getSettings, updateTextSize } from './api'
+
+const TEXT_ZOOM = { small: 0.85, medium: 1, large: 1.15, big: 1.3 }
 
 const localDateStr = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -68,6 +70,7 @@ export default function App() {
   const [timezone, setTimezone] = useState('America/New_York')
   const [isDark, setIsDark] = useState(() => localStorage.getItem('cb-theme') !== 'light')
   const [defaultPoints, setDefaultPoints] = useState(10)
+  const [textSize, setTextSize] = useState(() => localStorage.getItem('cb-text-size') || 'medium')
 
   const toggleTheme = () => setIsDark(d => {
     const next = !d
@@ -84,6 +87,7 @@ export default function App() {
     getSettings().then(s => {
       if (s.timezone) setTimezone(s.timezone)
       if (s.default_points) setDefaultPoints(s.default_points)
+      if (s.text_size) { setTextSize(s.text_size); localStorage.setItem('cb-text-size', s.text_size) }
     })
   }, [])
 
@@ -117,7 +121,7 @@ export default function App() {
   const daysFwd  = Math.round((new Date(selectedDate+'T12:00:00') - new Date(localDateStr()+'T12:00:00')) / 86400000)
 
   return (
-    <div style={{ ...theme, minHeight:'100vh', background:'var(--cb-bg)', transition:'background 0.2s, color 0.2s' }}>
+    <div style={{ ...theme, minHeight:'100vh', background:'var(--cb-bg)', transition:'background 0.2s, color 0.2s', zoom: TEXT_ZOOM[textSize] }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', background:'var(--cb-header)', borderBottom:'1px solid var(--cb-border)' }}>
         <div onClick={() => setView('board')} style={{ fontSize:26, fontWeight:700, color:'var(--cb-text)', cursor:'pointer' }}>Chore<span style={{color:'#7F77DD'}}>Board</span></div>
 
@@ -148,7 +152,7 @@ export default function App() {
 
       {view === 'board' && <Board kids={kids} chores={chores} requests={requests} selectedDate={selectedDate} onRefresh={refresh} showToast={showToast} />}
       {view === 'rewards' && <RewardsView kids={kids} rewards={rewards} onRefresh={refresh} showToast={showToast} />}
-      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} onRefresh={refresh} showToast={showToast} setView={setView} />}
+      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} textSize={textSize} onTextSizeChange={size => { setTextSize(size); localStorage.setItem('cb-text-size', size) }} onRefresh={refresh} showToast={showToast} setView={setView} />}
 
       {showPin && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 }}>

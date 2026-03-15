@@ -23,6 +23,10 @@ export const getRequests = () => fetch(`${BASE}/rewards/requests`).then(r => r.j
 export const createRequest = (data) => fetch(`${BASE}/rewards/requests`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
 export const acknowledgeRequest = (id) => fetch(`${BASE}/rewards/requests/${id}/acknowledge`, { method:'POST' }).then(r=>r.json())
 
+export const getShoutouts = (date) => fetch(`${BASE}/shoutouts${date ? `?date=${date}` : ''}`).then(r => r.json())
+export const createShoutout = (data) => fetch(`${BASE}/shoutouts`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
+export const deleteShoutout = (id) => fetch(`${BASE}/shoutouts/${id}`, { method:'DELETE' }).then(r=>r.json())
+
 export const verifyPin = (pin) => fetch(`${BASE}/pin/verify?pin=${pin}`).then(r=>r.json())
 export const updatePin = (pin) => fetch(`${BASE}/pin`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pin }) }).then(r=>r.json())
 
@@ -31,3 +35,4 @@ export const getAuditLog = () => fetch(`${BASE}/audit`).then(r => r.json())
 export const getSettings = () => fetch(`${BASE}/settings`).then(r => r.json())
 export const updateTimezone = (timezone) => fetch(`${BASE}/settings/timezone`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ timezone }) }).then(r => r.json())
 export const updateDefaultPoints = (points) => fetch(`${BASE}/settings/default-points`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ points }) }).then(r => r.json())
+export const updateTextSize = (size) => fetch(`${BASE}/settings/text-size`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ size }) }).then(r => r.json())
