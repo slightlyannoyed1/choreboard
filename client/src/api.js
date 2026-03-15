@@ -4,6 +4,7 @@ export const getKids = () => fetch(`${BASE}/kids`).then(r => r.json())
 export const createKid = (data) => fetch(`${BASE}/kids`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
 export const updateKid = (id, data) => fetch(`${BASE}/kids/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
 export const deleteKid = (id) => fetch(`${BASE}/kids/${id}`, { method:'DELETE' }).then(r=>r.json())
+export const adjustKidPoints = (id, data) => fetch(`${BASE}/kids/${id}/points`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
 
 export const getChores = (date) => fetch(`${BASE}/chores${date ? `?date=${date}` : ''}`).then(r => r.json())
 export const getAllChores = () => fetch(`${BASE}/chores/all`).then(r => r.json())
@@ -29,3 +30,4 @@ export const getAuditLog = () => fetch(`${BASE}/audit`).then(r => r.json())
 
 export const getSettings = () => fetch(`${BASE}/settings`).then(r => r.json())
 export const updateTimezone = (timezone) => fetch(`${BASE}/settings/timezone`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ timezone }) }).then(r => r.json())
+export const updateDefaultPoints = (points) => fetch(`${BASE}/settings/default-points`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ points }) }).then(r => r.json())

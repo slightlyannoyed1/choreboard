@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, deleteReward, acknowledgeRequest, updatePin, getAuditLog, updateTimezone } from '../api'
+import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, adjustKidPoints } from '../api'
 
 const tzLabel = (tz) => {
   const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
@@ -17,12 +17,13 @@ const TIMEZONES = [
 const EMOJIS = ['🦊','🦁','🐯','🐻','🐼','🐨','🦄','🐸','🐢','🐙','🦋','🐬','🦈','🐘','🦒','🦘','🦝','🦦','🐺','🦅','🐧','🦜','🦩','🦕','🦖','🐳','🦔','🐊','🦙','🐠']
 const COLORS = ['#7F77DD','#1D9E75','#D85A30','#D4537E','#378ADD','#639922','#BA7517','#E24B4A']
 
-export default function AdminView({ kids, allChores, rewards, requests, timezone, onTimezoneChange, onRefresh, showToast, setView }) {
+export default function AdminView({ kids, allChores, rewards, requests, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, onRefresh, showToast, setView }) {
   const [tab, setTab] = useState('pending')
   const [newKid, setNewKid] = useState({ name:'', emoji:'🦊', color:'#7F77DD' })
-  const [newChore, setNewChore] = useState({ kid_id:'', name:'', points:10, recurring:'daily' })
+  const [newChore, setNewChore] = useState({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6' })
   const [newReward, setNewReward] = useState({ name:'', points:50 })
   const [editingKid, setEditingKid] = useState(null)
+  const [editingReward, setEditingReward] = useState(null)
   const [newPin, setNewPin] = useState('')
   const [pinSaved, setPinSaved] = useState(false)
   const [auditLog, setAuditLog] = useState([])
@@ -44,9 +45,16 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
   }
 
   const addChore = async () => {
-    if (!newChore.kid_id || !newChore.name) return
-    await createChore(newChore); onRefresh(); showToast('Chore added!')
-    setNewChore({ kid_id:'', name:'', points:10, recurring:'daily' })
+    if (!newChore.kid_ids.length || !newChore.name) return
+    await Promise.all(newChore.kid_ids.map(kid_id => createChore({ ...newChore, kid_id })))
+    onRefresh(); showToast('Chore added!')
+    setNewChore({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6' })
+  }
+
+  const saveReward = async () => {
+    if (!editingReward.name) return
+    await updateReward(editingReward.id, { name: editingReward.name, points: editingReward.points })
+    onRefresh(); showToast('Saved!'); setEditingReward(null)
   }
 
   const addReward = async () => {
@@ -62,7 +70,19 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
     else showToast(res.error || 'Failed to update PIN')
   }
 
-  const tabs = ['pending', 'kids', 'chores', 'rewards', 'settings', 'log']
+  const [pointsKidId, setPointsKidId] = useState('')
+  const [pointsDelta, setPointsDelta] = useState(defaultPoints)
+  const [pointsReason, setPointsReason] = useState('')
+
+  const applyPoints = async (sign) => {
+    if (!pointsKidId) return
+    const delta = sign * (parseInt(pointsDelta) || 0)
+    if (delta === 0) return
+    const res = await adjustKidPoints(pointsKidId, { delta, reason: pointsReason || undefined })
+    if (res.ok) { onRefresh(); showToast(`${delta > 0 ? '+' : ''}${delta} pts applied!`); setPointsReason('') }
+  }
+
+  const tabs = ['pending', 'kids', 'chores', 'rewards', 'points', 'settings', 'log']
 
   return (
     <div>
@@ -166,7 +186,7 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
                 {allChores.filter(c=>c.kid_id===kid.id).map(c=>(
                   <div key={c.id} style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:10, padding:'14px 18px', marginBottom:8 }}>
                     <span style={{ flex:1, fontSize:18, color:'var(--cb-text)', fontWeight:600 }}>{c.name}</span>
-                    <span style={{ fontSize:15, color:'var(--cb-text-muted)', marginRight:16 }}>{c.points}pts · {c.recurring}</span>
+                    <span style={{ fontSize:15, color:'var(--cb-text-muted)', marginRight:16 }}>{c.points}pts · {recurringLabel(c.recurring)}</span>
                     <button onClick={async()=>{await deleteChore(c.id);onRefresh()}}
                       style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22 }}>&#x2715;</button>
                   </div>
@@ -178,20 +198,70 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
             ))}
             <div style={{ marginTop:8, background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:12 }}>
               <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Add chore</div>
-              <select value={newChore.kid_id} onChange={e=>setNewChore({...newChore,kid_id:e.target.value})} style={inputStyle}>
-                <option value=''>Select kid</option>
-                {kids.map(k=><option key={k.id} value={k.id}>{k.emoji} {k.name}</option>)}
-              </select>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {kids.map(k => {
+                  const active = newChore.kid_ids.includes(String(k.id))
+                  return (
+                    <button key={k.id} type="button" onClick={() => {
+                      const ids = newChore.kid_ids
+                      setNewChore({...newChore, kid_ids: active ? ids.filter(x=>x!==String(k.id)) : [...ids, String(k.id)]})
+                    }}
+                      style={{ padding:'10px 14px', borderRadius:8, border:'none', background: active?'#7F77DD':'var(--cb-border)', color: active?'#ffffff':'var(--cb-text-faint)', fontSize:15, fontWeight:700, cursor:'pointer', opacity: active?1:0.5 }}>
+                      {k.emoji} {k.name}
+                    </button>
+                  )
+                })}
+              </div>
               <input value={newChore.name} onChange={e=>setNewChore({...newChore,name:e.target.value})} placeholder="Chore name" style={inputStyle} />
-              <div style={{ display:'flex', gap:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <input type="number" value={newChore.points} onChange={e=>setNewChore({...newChore,points:parseInt(e.target.value)||0})} style={{...inputStyle, width:100}} />
-                <select value={newChore.recurring} onChange={e=>setNewChore({...newChore,recurring:e.target.value})} style={{...inputStyle, flex:1}}>
-                  <option value='daily'>Daily</option>
-                  <option value='weekdays'>Weekdays</option>
-                  <option value='weekly'>Weekly (Mon)</option>
-                </select>
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Reward Points</span>
+              </div>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d,i) => {
+                  const active = newChore.recurring.split(',').map(Number).includes(i)
+                  return (
+                    <button key={i} type="button" onClick={() => {
+                      const days = newChore.recurring.split(',').map(Number)
+                      const next = active ? days.filter(x=>x!==i) : [...days,i].sort((a,b)=>a-b)
+                      if (next.length > 0) setNewChore({...newChore, recurring: next.join(',')})
+                    }} style={{ padding:'10px 14px', borderRadius:8, border:'none', background: active?'#7F77DD':'var(--cb-border)', color: active?'#ffffff':'var(--cb-text-faint)', fontSize:15, fontWeight:700, cursor:'pointer', opacity: active?1:0.5 }}>
+                      {d}
+                    </button>
+                  )
+                })}
               </div>
               <button onClick={addChore} style={addBtnStyle}>Add Chore</button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'points' && (
+          <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:14 }}>
+            <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Select kid</div>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              {kids.map(k => {
+                const active = pointsKidId === String(k.id)
+                return (
+                  <button key={k.id} type="button" onClick={() => setPointsKidId(String(k.id))}
+                    style={{ padding:'10px 14px', borderRadius:8, border:'none', background: active?'#7F77DD':'var(--cb-border)', color: active?'#ffffff':'var(--cb-text-faint)', fontSize:15, fontWeight:700, cursor:'pointer', opacity: active?1:0.5 }}>
+                    {k.emoji} {k.name}
+                    <span style={{ marginLeft:8, fontWeight:400, opacity: active?1:0.7 }}>{k.points} pts</span>
+                  </button>
+                )
+              })}
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <input type="number" value={pointsDelta} min={1} onChange={e=>setPointsDelta(Math.abs(parseInt(e.target.value)||0))}
+                style={{...inputStyle, width:100}} />
+              <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points</span>
+            </div>
+            <input value={pointsReason} onChange={e=>setPointsReason(e.target.value)} placeholder="Reason (optional)" style={inputStyle} />
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => applyPoints(1)}
+                style={{ flex:1, padding:'14px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>+ Add Points</button>
+              <button onClick={() => applyPoints(-1)}
+                style={{ flex:1, padding:'14px 0', background:'#E24B4A', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>- Remove Points</button>
             </div>
           </div>
         )}
@@ -199,11 +269,29 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
         {tab === 'rewards' && (
           <div>
             {rewards.map(r=>(
-              <div key={r.id} style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:12, padding:'16px 20px', marginBottom:10 }}>
-                <span style={{ flex:1, fontSize:20, color:'var(--cb-text)', fontWeight:600 }}>{r.name}</span>
-                <span style={{ fontSize:18, color:'#7F77DD', fontWeight:700, marginRight:16 }}>{r.points} pts</span>
-                <button onClick={async()=>{await deleteReward(r.id);onRefresh()}}
-                  style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22 }}>&#x2715;</button>
+              <div key={r.id}>
+                {editingReward?.id === r.id ? (
+                  <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, marginBottom:10, display:'flex', flexDirection:'column', gap:12 }}>
+                    <input value={editingReward.name} onChange={e=>setEditingReward({...editingReward,name:e.target.value})} placeholder="Reward name" style={inputStyle} />
+                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                      <input type="number" value={editingReward.points} onChange={e=>setEditingReward({...editingReward,points:parseInt(e.target.value)||0})} style={{...inputStyle, width:100}} />
+                      <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points cost</span>
+                    </div>
+                    <div style={{ display:'flex', gap:10 }}>
+                      <button onClick={saveReward} style={{ ...addBtnStyle, flex:1 }}>Save</button>
+                      <button onClick={()=>setEditingReward(null)} style={{ flex:1, padding:'12px 0', background:'var(--cb-border)', border:'none', borderRadius:8, color:'var(--cb-text-sub)', fontSize:17, cursor:'pointer' }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:12, padding:'16px 20px', marginBottom:10 }}>
+                    <span style={{ flex:1, fontSize:20, color:'var(--cb-text)', fontWeight:600 }}>{r.name}</span>
+                    <span style={{ fontSize:18, color:'#7F77DD', fontWeight:700, marginRight:10 }}>{r.points} pts</span>
+                    <button onClick={()=>setEditingReward({id:r.id,name:r.name,points:r.points})}
+                      style={{ background:'none', border:'none', color:'#7F77DD', cursor:'pointer', fontSize:22, padding:'0 8px' }}>✎</button>
+                    <button onClick={async()=>{await deleteReward(r.id);onRefresh()}}
+                      style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22, padding:'0 8px' }}>&#x2715;</button>
+                  </div>
+                )}
               </div>
             ))}
             <div style={{ marginTop:18, background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:12 }}>
@@ -229,8 +317,8 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
               const isYesterday = entryStr === yesterdayStr
               const time = d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', timeZone: timezone })
               const dateLabel = isToday ? `Today ${time}` : isYesterday ? `Yesterday ${time}` : d.toLocaleDateString('en-US', { month:'short', day:'numeric', timeZone: timezone }) + ' ' + time
-              const icon = entry.type === 'chore_complete' ? '✓' : entry.type === 'chore_uncomplete' ? '↩' : '🏆'
-              const iconColor = entry.type === 'chore_complete' ? '#1D9E75' : entry.type === 'chore_uncomplete' ? 'var(--cb-text-muted)' : '#7F77DD'
+              const icon = entry.type === 'chore_complete' ? '✓' : entry.type === 'chore_uncomplete' ? '↩' : entry.type === 'prize_given' ? '🎁' : entry.type === 'points_added' ? '⬆' : entry.type === 'points_removed' ? '⬇' : '🏆'
+              const iconColor = entry.type === 'chore_complete' ? '#1D9E75' : entry.type === 'chore_uncomplete' ? 'var(--cb-text-muted)' : entry.type === 'points_added' ? '#1D9E75' : entry.type === 'points_removed' ? '#E24B4A' : '#7F77DD'
               return (
                 <div key={entry.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 18px', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:10, marginBottom:7 }}>
                   <span style={{ fontSize:18, color:iconColor, width:22, textAlign:'center', flexShrink:0 }}>{icon}</span>
@@ -264,6 +352,21 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
             </div>
 
             <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14, marginTop:14 }}>
+              <div style={{ fontSize:18, color:'var(--cb-text-sub)', fontWeight:700 }}>Default Points</div>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <input type="number" defaultValue={defaultPoints} key={defaultPoints} min={1}
+                  onBlur={async e => {
+                    const val = parseInt(e.target.value)
+                    if (!val || val < 1) return
+                    const res = await updateDefaultPoints(val)
+                    if (res.ok) { onDefaultPointsChange(val); showToast('Default points updated!') }
+                  }}
+                  style={{...inputStyle, width:100}} />
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>points (used when creating chores or adjusting points)</span>
+              </div>
+            </div>
+
+            <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14, marginTop:14 }}>
               <div style={{ fontSize:18, color:'var(--cb-text-sub)', fontWeight:700 }}>Change Admin PIN</div>
               <input type="text" inputMode="numeric" maxLength={4} value={newPin}
                 onChange={e => { setPinSaved(false); setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4)) }}
@@ -277,6 +380,17 @@ export default function AdminView({ kids, allChores, rewards, requests, timezone
       </div>
     </div>
   )
+}
+
+const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+function recurringLabel(recurring) {
+  if (recurring === 'daily') return 'Daily'
+  if (recurring === 'weekdays') return 'Weekdays'
+  if (recurring === 'weekly') return 'Weekly'
+  const nums = recurring.split(',').map(Number).sort((a,b)=>a-b)
+  if (nums.length === 7) return 'Daily'
+  if (nums.length === 5 && nums.join(',') === '1,2,3,4,5') return 'Weekdays'
+  return nums.map(n => DAY_NAMES[n]).join(', ')
 }
 
 const inputStyle = { padding:'13px 14px', background:'var(--cb-input-bg)', border:'1px solid var(--cb-border2)', borderRadius:8, color:'var(--cb-text)', fontSize:17, width:'100%', boxSizing:'border-box' }

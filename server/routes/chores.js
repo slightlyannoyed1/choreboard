@@ -15,7 +15,7 @@ function choreIsActiveOnDow(recurring, dow) {
   if (recurring === 'daily') return true
   if (recurring === 'weekdays') return dow >= 1 && dow <= 5
   if (recurring === 'weekly') return dow === 1
-  return true
+  return recurring.split(',').map(Number).includes(dow)
 }
 
 router.get('/all', (_req, res) => {
@@ -33,9 +33,33 @@ router.get('/', (req, res) => {
     'SELECT chore_id FROM completions WHERE completed_date=?'
   ).all(date).map(r => r.chore_id)
 
+  const streakRows = db.prepare(
+    `SELECT chore_id, completed_date FROM completions
+     WHERE completed_date <= ? AND completed_date >= date(?, '-60 days')
+     ORDER BY chore_id, completed_date DESC`
+  ).all(date, date)
+  const byChore = {}
+  for (const row of streakRows) {
+    if (!byChore[row.chore_id]) byChore[row.chore_id] = []
+    byChore[row.chore_id].push(row.completed_date)
+  }
+  function computeStreak(dates, fromDate) {
+    if (!dates || dates.length === 0) return 0
+    let streak = 0, expected = fromDate
+    for (const d of dates) {
+      if (d === expected) {
+        streak++
+        const prev = new Date(expected + 'T12:00:00')
+        prev.setDate(prev.getDate() - 1)
+        expected = `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-${String(prev.getDate()).padStart(2,'0')}`
+      } else break
+    }
+    return streak
+  }
+
   const result = chores
     .filter(c => choreIsActiveOnDow(c.recurring, dow))
-    .map(c => ({ ...c, done: completions.includes(c.id) }))
+    .map(c => ({ ...c, done: completions.includes(c.id), streak: computeStreak(byChore[c.id], date) }))
 
   res.json(result)
 })

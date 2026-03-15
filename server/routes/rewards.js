@@ -58,7 +58,18 @@ router.post('/requests', (req, res) => {
 
 // Admin acknowledges — prize has been handed out
 router.post('/requests/:id/acknowledge', (req, res) => {
+  const request = db.prepare(`
+    SELECT rr.kid_id, k.name as kid_name, r.name as reward_name, r.points as reward_points
+    FROM redemption_requests rr
+    JOIN kids k ON k.id = rr.kid_id
+    JOIN rewards r ON r.id = rr.reward_id
+    WHERE rr.id=?
+  `).get(req.params.id)
   db.prepare('UPDATE redemption_requests SET acknowledged=1 WHERE id=?').run(req.params.id)
+  if (request) {
+    db.prepare('INSERT INTO audit_log (kid_id, kid_name, type, description, points) VALUES (?, ?, ?, ?, ?)')
+      .run(request.kid_id, request.kid_name, 'prize_given', request.reward_name, 0)
+  }
   res.json({ ok: true })
 })
 

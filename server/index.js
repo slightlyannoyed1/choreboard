@@ -29,7 +29,16 @@ app.put('/api/pin', (req, res) => {
 
 app.get('/api/settings', (_req, res) => {
   const tz = db.prepare('SELECT value FROM settings WHERE key=?').get('timezone')
-  res.json({ timezone: tz ? tz.value : 'America/New_York' })
+  const dp = db.prepare('SELECT value FROM settings WHERE key=?').get('default_points')
+  res.json({ timezone: tz ? tz.value : 'America/New_York', default_points: dp ? parseInt(dp.value) : 10 })
+})
+
+app.put('/api/settings/default-points', (req, res) => {
+  const { points } = req.body
+  const val = parseInt(points)
+  if (!val || val < 1) return res.status(400).json({ error: 'Invalid points value' })
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('default_points', String(val))
+  res.json({ ok: true })
 })
 
 app.put('/api/settings/timezone', (req, res) => {

@@ -1,5 +1,16 @@
 import { completeChore, uncompleteChore } from '../api'
 
+const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+function recurringLabel(recurring) {
+  if (recurring === 'daily') return 'Daily'
+  if (recurring === 'weekdays') return 'Weekdays'
+  if (recurring === 'weekly') return 'Weekly'
+  const nums = recurring.split(',').map(Number).sort((a,b)=>a-b)
+  if (nums.length === 7) return 'Daily'
+  if (nums.length === 5 && nums.join(',') === '1,2,3,4,5') return 'Weekdays'
+  return nums.map(n => DAY_NAMES[n]).join(', ')
+}
+
 function burst(color) {
   const canvas = document.createElement('canvas')
   canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9999'
@@ -89,8 +100,14 @@ export default function KidColumn({ kid, chores, awards, selectedDate, onRefresh
             <div style={{ width:36, height:36, borderRadius:'50%', border:`3px solid ${kid.color}66`, flexShrink:0 }} />
             <div style={{ flex:1 }}>
               <div style={{ fontSize:22, color:'var(--cb-text)', fontWeight:700 }}>{chore.name}</div>
-              <div style={{ fontSize:16, color:'var(--cb-text-muted)', marginTop:3 }}><span style={{ color: kid.color, fontWeight:700 }}>{chore.points} pts</span> · {chore.recurring}</div>
+              <div style={{ fontSize:16, color:'var(--cb-text-muted)', marginTop:3 }}><span style={{ color: kid.color, fontWeight:700 }}>{chore.points} pts</span> · {recurringLabel(chore.recurring)}</div>
             </div>
+            {chore.streak >= 2 && (
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
+                <span style={{ fontSize:20 }}>🔥</span>
+                <span style={{ fontSize:13, fontWeight:700, color:'#D85A30' }}>{chore.streak}</span>
+              </div>
+            )}
           </div>
         ))}
 
@@ -101,8 +118,14 @@ export default function KidColumn({ kid, chores, awards, selectedDate, onRefresh
             <div style={{ width:36, height:36, borderRadius:'50%', background: kid.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, color:'#fff', flexShrink:0 }}>✓</div>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:22, color:'var(--cb-text-dim)', fontWeight:700, textDecoration:'line-through' }}>{chore.name}</div>
-              <div style={{ fontSize:16, color:'var(--cb-text-faint)', marginTop:3 }}>{chore.points} pts · {chore.recurring}</div>
+              <div style={{ fontSize:16, color:'var(--cb-text-faint)', marginTop:3 }}>{chore.points} pts · {recurringLabel(chore.recurring)}</div>
             </div>
+            {chore.streak >= 2 && (
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
+                <span style={{ fontSize:20 }}>🔥</span>
+                <span style={{ fontSize:13, fontWeight:700, color:'#D85A30' }}>{chore.streak}</span>
+              </div>
+            )}
           </div>
         ))}
       </div>

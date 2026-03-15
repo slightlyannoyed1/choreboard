@@ -67,6 +67,7 @@ export default function App() {
   const [now, setNow] = useState(new Date())
   const [timezone, setTimezone] = useState('America/New_York')
   const [isDark, setIsDark] = useState(() => localStorage.getItem('cb-theme') !== 'light')
+  const [defaultPoints, setDefaultPoints] = useState(10)
 
   const toggleTheme = () => setIsDark(d => {
     const next = !d
@@ -80,7 +81,10 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    getSettings().then(s => { if (s.timezone) setTimezone(s.timezone) })
+    getSettings().then(s => {
+      if (s.timezone) setTimezone(s.timezone)
+      if (s.default_points) setDefaultPoints(s.default_points)
+    })
   }, [])
 
   const showToast = (msg) => {
@@ -115,7 +119,7 @@ export default function App() {
   return (
     <div style={{ ...theme, minHeight:'100vh', background:'var(--cb-bg)', transition:'background 0.2s, color 0.2s' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', background:'var(--cb-header)', borderBottom:'1px solid var(--cb-border)' }}>
-        <div style={{ fontSize:26, fontWeight:700, color:'var(--cb-text)' }}>Chore<span style={{color:'#7F77DD'}}>Board</span></div>
+        <div onClick={() => setView('board')} style={{ fontSize:26, fontWeight:700, color:'var(--cb-text)', cursor:'pointer' }}>Chore<span style={{color:'#7F77DD'}}>Board</span></div>
 
         {view === 'board' && (
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -144,7 +148,7 @@ export default function App() {
 
       {view === 'board' && <Board kids={kids} chores={chores} requests={requests} selectedDate={selectedDate} onRefresh={refresh} showToast={showToast} />}
       {view === 'rewards' && <RewardsView kids={kids} rewards={rewards} onRefresh={refresh} showToast={showToast} />}
-      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} timezone={timezone} onTimezoneChange={setTimezone} onRefresh={refresh} showToast={showToast} setView={setView} />}
+      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} onRefresh={refresh} showToast={showToast} setView={setView} />}
 
       {showPin && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 }}>
