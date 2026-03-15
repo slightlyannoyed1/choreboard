@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Board from './components/Board'
 import RewardsView from './components/RewardsView'
 import AdminView from './components/AdminView'
-import { getKids, getChores, getAllChores, getRewards, getRequests, verifyPin, getSettings, updateTextSize, getPendingShoutouts } from './api'
+import { getKids, getChores, getAllChores, getRewards, getRequests, verifyPin, getSettings, getPendingShoutouts } from './api'
 
 const TEXT_ZOOM = { small: 0.85, medium: 1, large: 1.15, big: 1.3 }
 
@@ -88,7 +88,6 @@ export default function App() {
     getSettings().then(s => {
       if (s.timezone) setTimezone(s.timezone)
       if (s.default_points) setDefaultPoints(s.default_points)
-      if (s.text_size) { setTextSize(s.text_size); localStorage.setItem('cb-text-size', s.text_size) }
     })
   }, [])
 

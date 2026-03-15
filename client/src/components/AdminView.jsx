@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateTextSize, adjustKidPoints, awardShoutout } from '../api'
+import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, adjustKidPoints, awardShoutout } from '../api'
 
 const tzLabel = (tz) => {
   const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
@@ -433,9 +433,8 @@ export default function AdminView({ kids, allChores, rewards, requests, pendingS
               <div style={{ fontSize:18, color:'var(--cb-text-sub)', fontWeight:700 }}>Text Size</div>
               <div style={{ display:'flex', gap:8 }}>
                 {TEXT_SIZES.map(size => (
-                  <button key={size} onClick={async () => {
-                    const res = await updateTextSize(size)
-                    if (res.ok) { onTextSizeChange(size); showToast(`Text size: ${size}`) }
+                  <button key={size} onClick={() => {
+                    onTextSizeChange(size); showToast(`Text size: ${size}`)
                   }} style={{ flex:1, padding:'10px 0', borderRadius:8, border:`2px solid ${textSize === size ? '#7F77DD' : 'var(--cb-border2)'}`, background: textSize === size ? '#7F77DD' : 'var(--cb-surface)', color: textSize === size ? '#fff' : 'var(--cb-text-sub)', fontSize:15, fontWeight:600, cursor:'pointer', textTransform:'capitalize' }}>
                     {size}
                   </button>
