@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateTextSize, adjustKidPoints, awardShoutout } from '../api'
+import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateTextSize, adjustKidPoints, awardShoutout } from '../api'
 
 const tzLabel = (tz) => {
   const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
@@ -85,7 +85,7 @@ export default function AdminView({ kids, allChores, rewards, requests, pendingS
     if (res.ok) { onRefresh(); showToast(`${delta > 0 ? '+' : ''}${delta} pts applied!`); setPointsReason('') }
   }
 
-  const tabs = ['pending', 'kids', 'chores', 'rewards', 'points', 'settings', 'log']
+  const tabs = ['kids', 'chores', 'rewards', 'points', 'settings', 'log']
 
   return (
     <div>
@@ -93,7 +93,8 @@ export default function AdminView({ kids, allChores, rewards, requests, pendingS
         {tabs.map(t => (
           <div key={t} onClick={() => setTab(t)}
             style={{ padding:'16px 20px', fontSize:17, fontWeight: tab===t?700:400, color: tab===t?'#7F77DD':'var(--cb-text-muted)', borderBottom:`3px solid ${tab===t?'#7F77DD':'transparent'}`, cursor:'pointer', textTransform:'capitalize', whiteSpace:'nowrap', position:'relative' }}>
-            {t}{t==='pending'&&requests.length>0?` (${requests.length})`:''}
+            {t}
+            {t==='rewards'&&requests.length>0&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
             {t==='points'&&pendingShoutouts.length>0&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
           </div>
         ))}
@@ -103,27 +104,6 @@ export default function AdminView({ kids, allChores, rewards, requests, pendingS
       </div>
 
       <div style={{ padding:16 }}>
-
-        {tab === 'pending' && (
-          <div>
-            {requests.length === 0 && <div style={{ color:'var(--cb-text-dim)', fontSize:18 }}>No pending requests.</div>}
-            {requests.map(r => (
-              <div key={r.id} style={{ background:'var(--cb-surface2)', border:'1px solid #7F77DD44', borderRadius:12, padding:'18px 20px', marginBottom:12 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:12 }}>
-                  <span style={{ fontSize:30 }}>🏆</span>
-                  <div>
-                    <div style={{ fontSize:20, color:'var(--cb-text)', fontWeight:700 }}>{r.reward_name}</div>
-                    <div style={{ fontSize:16, color:'var(--cb-text-muted)', marginTop:2 }}>{r.kid_name} · {r.reward_points} pts</div>
-                  </div>
-                </div>
-                <button onClick={async()=>{await acknowledgeRequest(r.id);onRefresh();showToast('Prize handed out!')}}
-                  style={{ width:'100%', padding:'14px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:18, cursor:'pointer', fontWeight:700 }}>
-                  ✓ Got it — prize given
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
 
         {tab === 'kids' && (
           <div>
@@ -325,6 +305,32 @@ export default function AdminView({ kids, allChores, rewards, requests, pendingS
 
         {tab === 'rewards' && (
           <div>
+            {requests.length > 0 && (
+              <div style={{ marginBottom:18 }}>
+                <div style={{ fontSize:15, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Pending requests</div>
+                {requests.map(r => (
+                  <div key={r.id} style={{ background:'var(--cb-surface2)', border:'1px solid #7F77DD44', borderRadius:12, padding:'16px 18px', marginBottom:10 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+                      <span style={{ fontSize:26 }}>🏆</span>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:18, color:'var(--cb-text)', fontWeight:700 }}>{r.reward_name}</div>
+                        <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginTop:2 }}>{r.kid_name} · {r.reward_points} pts</div>
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', gap:10 }}>
+                      <button onClick={async () => { await acknowledgeRequest(r.id); onRefresh(); showToast('Prize handed out!') }}
+                        style={{ flex:1, padding:'12px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:16, cursor:'pointer', fontWeight:700 }}>
+                        ✓ Prize given
+                      </button>
+                      <button onClick={async () => { await rejectRequest(r.id); onRefresh(); showToast('Request rejected') }}
+                        style={{ flex:1, padding:'12px 0', background:'var(--cb-surface)', border:'1px solid #E24B4A', borderRadius:8, color:'#E24B4A', fontSize:16, cursor:'pointer', fontWeight:700 }}>
+                        ✕ Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {rewards.map(r=>(
               <div key={r.id}>
                 {editingReward?.id === r.id ? (

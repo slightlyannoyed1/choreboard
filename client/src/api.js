@@ -22,6 +22,7 @@ export const deleteReward = (id) => fetch(`${BASE}/rewards/${id}`, { method:'DEL
 export const getRequests = () => fetch(`${BASE}/rewards/requests`).then(r => r.json())
 export const createRequest = (data) => fetch(`${BASE}/rewards/requests`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
 export const acknowledgeRequest = (id) => fetch(`${BASE}/rewards/requests/${id}/acknowledge`, { method:'POST' }).then(r=>r.json())
+export const rejectRequest = (id) => fetch(`${BASE}/rewards/requests/${id}/reject`, { method:'POST' }).then(r=>r.json())
 
 export const getShoutouts = (date) => fetch(`${BASE}/shoutouts${date ? `?date=${date}` : ''}`).then(r => r.json())
 export const getPendingShoutouts = () => fetch(`${BASE}/shoutouts/pending`).then(r => r.json())
