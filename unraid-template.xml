@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>ChoreBoard</Name>
+  <Repository>slightlyannoyed/choreboard:latest</Repository>
+  <Registry>https://hub.docker.com/r/slightlyannoyed/choreboard</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/slightlyannoyed1/choreboard/issues</Support>
+  <Project>https://github.com/slightlyannoyed1/choreboard</Project>
+  <Overview>A self-hosted chore tracking and rewards app for families. Assign chores to kids, track completions, award points, and let kids redeem points for rewards. Includes an admin panel with PIN protection, audit log, and dark/light mode.</Overview>
+  <Category>Tools: HomeAutomation:</Category>
+  <WebUI>http://[IP]:[PORT:3000]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/slightlyannoyed1/choreboard/main/unraid-template.xml</TemplateURL>
+  <Icon>https://img.icons8.com/color/128/checked-checkbox.png</Icon>
+  <Config Name="WebUI Port" Target="3000" Default="3000" Mode="tcp"
+    Description="Port to access the ChoreBoard web interface."
+    Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="Data Path" Target="/app/data" Default="/mnt/user/appdata/choreboard" Mode="rw"
+    Description="Where the database is stored. Must survive container restarts."
+    Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/choreboard</Config>
+  <Config Name="Admin PIN" Target="ADMIN_PIN" Default="1234" Mode=""
+    Description="4-digit PIN required to access the admin panel. Change this before deploying!"
+    Type="Variable" Display="always" Required="true" Mask="true">1234</Config>
+  <Config Name="DB Path" Target="DB_PATH" Default="/app/data/choreboard.db" Mode=""
+    Description="Full path to the SQLite database file inside the container. No need to change this."
+    Type="Variable" Display="advanced" Required="true" Mask="false">/app/data/choreboard.db</Config>
+</Container>
