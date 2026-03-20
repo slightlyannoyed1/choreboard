@@ -1,8 +1,11 @@
 import { useState } from 'react'
-import { createRequest } from '../api'
+import { createRequest, createSuggestion } from '../api'
 
-export default function RewardsView({ kids, rewards, onRefresh, showToast }) {
+export default function RewardsView({ kids, rewards, suggestions, onRefresh, showToast }) {
   const [selectedKid, setSelectedKid] = useState(null)
+  const [suggesting, setSuggesting] = useState(false)
+  const [suggestionText, setSuggestionText] = useState('')
+  const [suggestionKidId, setSuggestionKidId] = useState(null)
   const kid = kids.find(k => k.id === selectedKid)
 
   const handleClaim = async (reward) => {
@@ -12,11 +15,18 @@ export default function RewardsView({ kids, rewards, onRefresh, showToast }) {
     else showToast(res.error || 'Could not claim reward')
   }
 
+  const handleSuggest = async () => {
+    if (!suggestionKidId || !suggestionText.trim()) return
+    const res = await createSuggestion({ kid_id: suggestionKidId, name: suggestionText.trim() })
+    if (res.ok) { showToast('Suggestion sent!'); setSuggestionText(''); setSuggestionKidId(null); setSuggesting(false); onRefresh() }
+    else showToast(res.error || 'Could not send suggestion')
+  }
+
   return (
     <div style={{ padding:20 }}>
       <div style={{ display:'flex', gap:12, marginBottom:24, flexWrap:'wrap' }}>
         {kids.map(k => (
-          <button key={k.id} onClick={() => setSelectedKid(k.id)}
+          <button key={k.id} onClick={() => { setSelectedKid(k.id); setSuggesting(false); setSuggestionText('') }}
             style={{ padding:'12px 22px', borderRadius:24, border:`2px solid ${selectedKid===k.id?k.color:'var(--cb-border2)'}`, background: selectedKid===k.id?k.color+'22':'var(--cb-surface2)', color: selectedKid===k.id?k.color:'var(--cb-text-sub)', fontSize:18, fontWeight:600, cursor:'pointer' }}>
             {k.emoji} {k.name} <span style={{ fontSize:15, fontWeight:400 }}>({k.points}pts)</span>
           </button>
@@ -51,6 +61,55 @@ export default function RewardsView({ kids, rewards, onRefresh, showToast }) {
             </div>
           )
         })}
+
+        {/* Pending suggestions */}
+        {suggestions.map(s => (
+          <div key={s.id} style={{ background:'var(--cb-surface)', border:'1px dashed var(--cb-border2)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:10, opacity:0.7 }}>
+            <div style={{ fontSize:13, color:'var(--cb-text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:0.5 }}>Suggested · Pending review</div>
+            <div style={{ fontSize:20, color:'var(--cb-text)', fontWeight:700 }}>{s.name}</div>
+            <div style={{ fontSize:15, color:'var(--cb-text-faint)' }}>{s.kid_emoji} {s.kid_name} · Waiting for admin</div>
+          </div>
+        ))}
+
+        {/* Suggest a new reward card */}
+        <div style={{ background:'var(--cb-surface)', border:'2px dashed var(--cb-border2)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14, justifyContent:'center' }}>
+          {suggesting ? (
+            <>
+              <div style={{ fontSize:16, color:'var(--cb-text-sub)', fontWeight:600 }}>Who's suggesting?</div>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                {kids.map(k => (
+                  <button key={k.id} onClick={() => setSuggestionKidId(k.id)}
+                    style={{ padding:'8px 14px', borderRadius:20, border:`2px solid ${suggestionKidId===k.id?k.color:'var(--cb-border2)'}`, background: suggestionKidId===k.id?k.color+'22':'transparent', color: suggestionKidId===k.id?k.color:'var(--cb-text-sub)', fontSize:15, fontWeight:600, cursor:'pointer' }}>
+                    {k.emoji} {k.name}
+                  </button>
+                ))}
+              </div>
+              <input
+                value={suggestionText}
+                onChange={e => setSuggestionText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSuggest(); if (e.key === 'Escape') { setSuggesting(false); setSuggestionText(''); setSuggestionKidId(null) } }}
+                placeholder="What reward do you want?"
+                autoFocus
+                style={{ padding:'11px 14px', borderRadius:8, border:'1px solid var(--cb-border2)', background:'var(--cb-input-bg)', color:'var(--cb-text)', fontSize:16, outline:'none' }}
+              />
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={handleSuggest} disabled={!suggestionKidId || !suggestionText.trim()}
+                  style={{ flex:1, padding:'12px 0', background: suggestionKidId&&suggestionText.trim() ? '#7F77DD' : 'var(--cb-surface2)', border:'none', borderRadius:8, color: suggestionKidId&&suggestionText.trim() ? '#fff' : 'var(--cb-text-faint)', fontSize:16, fontWeight:700, cursor: suggestionKidId&&suggestionText.trim() ? 'pointer' : 'not-allowed' }}>
+                  Send
+                </button>
+                <button onClick={() => { setSuggesting(false); setSuggestionText(''); setSuggestionKidId(null) }}
+                  style={{ padding:'12px 16px', background:'transparent', border:'1px solid var(--cb-border2)', borderRadius:8, color:'var(--cb-text-sub)', fontSize:16, cursor:'pointer' }}>
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            <button onClick={() => setSuggesting(true)}
+              style={{ background:'none', border:'none', color:'var(--cb-text-faint)', fontSize:16, fontWeight:600, cursor:'pointer', padding:'20px 0', textAlign:'center' }}>
+              + Suggest a new reward
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

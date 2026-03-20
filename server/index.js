@@ -100,6 +100,14 @@ app.post('/api/shoutouts', (req, res) => {
   res.json({ ok: true, id: result.lastInsertRowid })
 })
 
+app.post('/api/shoutouts/:id/acknowledge', (req, res) => {
+  const shoutout = db.prepare('SELECT * FROM kid_shoutouts WHERE id=?').get(req.params.id)
+  if (!shoutout) return res.status(404).json({ error: 'Not found' })
+  if (shoutout.awarded) return res.status(400).json({ error: 'Already reviewed' })
+  db.prepare('UPDATE kid_shoutouts SET awarded=1, awarded_points=0 WHERE id=?').run(shoutout.id)
+  res.json({ ok: true })
+})
+
 app.delete('/api/shoutouts/:id', (req, res) => {
   db.prepare('DELETE FROM kid_shoutouts WHERE id=?').run(req.params.id)
   res.json({ ok: true })

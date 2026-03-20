@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, adjustKidPoints, awardShoutout } from '../api'
+import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, approveSuggestion, rejectSuggestion, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, adjustKidPoints, awardShoutout, acknowledgeShoutout, deleteShoutout } from '../api'
 
 const tzLabel = (tz) => {
   const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
@@ -19,7 +19,7 @@ const COLORS = ['#7F77DD','#1D9E75','#D85A30','#D4537E','#378ADD','#639922','#BA
 
 const TEXT_SIZES = ['small', 'medium', 'large', 'big']
 
-export default function AdminView({ kids, allChores, rewards, requests, pendingShoutouts, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, textSize, onTextSizeChange, onRefresh, showToast, setView }) {
+export default function AdminView({ kids, allChores, rewards, requests, suggestions, pendingShoutouts, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, textSize, onTextSizeChange, onRefresh, showToast, setView }) {
   const [tab, setTab] = useState('pending')
   const [newKid, setNewKid] = useState({ name:'', emoji:'🦊', color:'#7F77DD' })
   const [newChore, setNewChore] = useState({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6' })
@@ -30,6 +30,7 @@ export default function AdminView({ kids, allChores, rewards, requests, pendingS
   const [pinSaved, setPinSaved] = useState(false)
   const [auditLog, setAuditLog] = useState([])
   const [shoutoutPoints, setShoutoutPoints] = useState({})
+  const [suggestionPoints, setSuggestionPoints] = useState({})
 
   useEffect(() => {
     if (tab === 'log') getAuditLog().then(setAuditLog)
@@ -94,7 +95,7 @@ export default function AdminView({ kids, allChores, rewards, requests, pendingS
           <div key={t} onClick={() => setTab(t)}
             style={{ padding:'16px 20px', fontSize:17, fontWeight: tab===t?700:400, color: tab===t?'#7F77DD':'var(--cb-text-muted)', borderBottom:`3px solid ${tab===t?'#7F77DD':'transparent'}`, cursor:'pointer', textTransform:'capitalize', whiteSpace:'nowrap', position:'relative' }}>
             {t}
-            {t==='rewards'&&requests.length>0&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
+            {t==='rewards'&&(requests.length>0||suggestions.length>0)&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
             {t==='points'&&pendingShoutouts.length>0&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
           </div>
         ))}
@@ -261,6 +262,13 @@ export default function AdminView({ kids, allChores, rewards, requests, pendingS
                               const res = await awardShoutout(s.id, pts)
                               if (res.ok) { onRefresh(); showToast(`+${pts} pts awarded!`) }
                             }} style={{ padding:'8px 14px', borderRadius:8, border:'none', background:'#1D9E75', color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer', flexShrink:0 }}>Award</button>
+                            <button onClick={async () => {
+                              const res = await acknowledgeShoutout(s.id)
+                              if (res.ok) { onRefresh(); showToast('Shoutout recognized, no points') }
+                            }} style={{ padding:'8px 14px', borderRadius:8, border:'1px solid var(--cb-border2)', background:'transparent', color:'var(--cb-text-sub)', fontSize:14, fontWeight:700, cursor:'pointer', flexShrink:0 }}>No pts</button>
+                            <button onClick={async () => {
+                              await deleteShoutout(s.id); onRefresh(); showToast('Request rejected')
+                            }} style={{ padding:'8px 14px', borderRadius:8, border:'1px solid #E24B4A', background:'transparent', color:'#E24B4A', fontSize:14, fontWeight:700, cursor:'pointer', flexShrink:0 }}>Reject</button>
                           </div>
                         )
                       })}
@@ -305,6 +313,41 @@ export default function AdminView({ kids, allChores, rewards, requests, pendingS
 
         {tab === 'rewards' && (
           <div>
+            {suggestions.length > 0 && (
+              <div style={{ marginBottom:18 }}>
+                <div style={{ fontSize:15, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Reward suggestions</div>
+                {suggestions.map(s => {
+                  const pts = suggestionPoints[s.id] ?? defaultPoints
+                  return (
+                    <div key={s.id} style={{ background:'var(--cb-surface2)', border:'1px solid #7F77DD44', borderRadius:12, padding:'16px 18px', marginBottom:10 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+                        <span style={{ fontSize:22 }}>🌟</span>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:18, color:'var(--cb-text)', fontWeight:700 }}>{s.name}</div>
+                          <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginTop:2 }}>{s.kid_emoji} {s.kid_name}</div>
+                        </div>
+                      </div>
+                      <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:10 }}>
+                        <input type="number" min={1} value={pts}
+                          onChange={e => setSuggestionPoints(p => ({ ...p, [s.id]: Math.abs(parseInt(e.target.value)||0) }))}
+                          style={{ ...inputStyle, width:90, padding:'8px 10px' }} />
+                        <span style={{ fontSize:15, color:'var(--cb-text-muted)' }}>pts to approve</span>
+                      </div>
+                      <div style={{ display:'flex', gap:10 }}>
+                        <button onClick={async () => { const res = await approveSuggestion(s.id, pts); if (res.ok) { onRefresh(); showToast(`Added "${s.name}"!`) } }}
+                          style={{ flex:1, padding:'11px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:15, cursor:'pointer', fontWeight:700 }}>
+                          ✓ Approve
+                        </button>
+                        <button onClick={async () => { await rejectSuggestion(s.id); onRefresh(); showToast('Suggestion rejected') }}
+                          style={{ flex:1, padding:'11px 0', background:'var(--cb-surface)', border:'1px solid #E24B4A', borderRadius:8, color:'#E24B4A', fontSize:15, cursor:'pointer', fontWeight:700 }}>
+                          ✕ Reject
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
             {requests.length > 0 && (
               <div style={{ marginBottom:18 }}>
                 <div style={{ fontSize:15, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Pending requests</div>

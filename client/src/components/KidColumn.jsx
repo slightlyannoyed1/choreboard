@@ -49,7 +49,7 @@ function burst(color) {
   draw()
 }
 
-export default function KidColumn({ kid, chores, awards, shoutouts, selectedDate, onRefresh, showToast }) {
+export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, selectedDate, onRefresh, showToast }) {
   const [adding, setAdding] = useState(false)
   const [text, setText] = useState('')
 
@@ -128,6 +128,15 @@ export default function KidColumn({ kid, chores, awards, shoutouts, selectedDate
       )}
 
       <div style={{ padding:'10px 12px 16px', display:'flex', flexDirection:'column', gap:8 }}>
+        {redeemed && redeemed.map(r => (
+          <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:'linear-gradient(135deg, #fff8e1, #fff3cd)', border:'1px solid #FFD70066', borderRadius:10 }}>
+            <span style={{ fontSize:26, flexShrink:0 }}>🎉</span>
+            <div>
+              <div style={{ fontSize:13, color:'#B8860B', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5 }}>Redeemed!</div>
+              <div style={{ fontSize:16, color:'#5a4000', fontWeight:600, marginTop:2 }}>{r.reward_name}</div>
+            </div>
+          </div>
+        ))}
         {awards && awards.map(a => (
           <div key={a.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:'var(--cb-award-bg)', border:'1px solid #7F77DD55', borderRadius:10 }}>
             <span style={{ fontSize:26, flexShrink:0 }}>🏆</span>
@@ -147,6 +156,8 @@ export default function KidColumn({ kid, chores, awards, shoutouts, selectedDate
                 <div style={{ flex:1, fontSize:16, color:'var(--cb-text)', fontWeight:500 }}>{s.description}</div>
                 {s.awarded_points > 0
                   ? <span style={{ background: kid.color + '33', color: kid.color, padding:'3px 10px', borderRadius:20, fontSize:14, fontWeight:700, flexShrink:0 }}>+{s.awarded_points} pts</span>
+                  : s.awarded
+                  ? <span style={{ color:'var(--cb-text-faint)', fontSize:13, flexShrink:0 }}>✓</span>
                   : <button onClick={() => handleDeleteShoutout(s.id)} title="Remove" style={{ background:'none', border:'none', color:'var(--cb-text-faint)', fontSize:16, cursor:'pointer', padding:'0 4px', lineHeight:1, flexShrink:0 }}>×</button>
                 }
               </div>

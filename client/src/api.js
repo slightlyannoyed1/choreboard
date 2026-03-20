@@ -20,6 +20,11 @@ export const updateReward = (id, data) => fetch(`${BASE}/rewards/${id}`, { metho
 export const deleteReward = (id) => fetch(`${BASE}/rewards/${id}`, { method:'DELETE' }).then(r=>r.json())
 
 export const getRequests = () => fetch(`${BASE}/rewards/requests`).then(r => r.json())
+export const getSuggestions = () => fetch(`${BASE}/rewards/suggestions`).then(r => r.json())
+export const createSuggestion = (data) => fetch(`${BASE}/rewards/suggestions`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
+export const approveSuggestion = (id, points) => fetch(`${BASE}/rewards/suggestions/${id}/approve`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ points }) }).then(r=>r.json())
+export const rejectSuggestion = (id) => fetch(`${BASE}/rewards/suggestions/${id}/reject`, { method:'POST' }).then(r=>r.json())
+export const getRedeemed = (date) => fetch(`${BASE}/rewards/redeemed${date ? `?date=${date}` : ''}`).then(r => r.json())
 export const createRequest = (data) => fetch(`${BASE}/rewards/requests`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
 export const acknowledgeRequest = (id) => fetch(`${BASE}/rewards/requests/${id}/acknowledge`, { method:'POST' }).then(r=>r.json())
 export const rejectRequest = (id) => fetch(`${BASE}/rewards/requests/${id}/reject`, { method:'POST' }).then(r=>r.json())
@@ -29,6 +34,7 @@ export const getPendingShoutouts = () => fetch(`${BASE}/shoutouts/pending`).then
 export const createShoutout = (data) => fetch(`${BASE}/shoutouts`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
 export const deleteShoutout = (id) => fetch(`${BASE}/shoutouts/${id}`, { method:'DELETE' }).then(r=>r.json())
 export const awardShoutout = (id, points) => fetch(`${BASE}/shoutouts/${id}/award`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ points }) }).then(r=>r.json())
+export const acknowledgeShoutout = (id) => fetch(`${BASE}/shoutouts/${id}/acknowledge`, { method:'POST' }).then(r=>r.json())
 
 export const verifyPin = (pin) => fetch(`${BASE}/pin/verify?pin=${pin}`).then(r=>r.json())
 export const updatePin = (pin) => fetch(`${BASE}/pin`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pin }) }).then(r=>r.json())

@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Board from './components/Board'
 import RewardsView from './components/RewardsView'
 import AdminView from './components/AdminView'
-import { getKids, getChores, getAllChores, getRewards, getRequests, verifyPin, getSettings, getPendingShoutouts } from './api'
+import { getKids, getChores, getAllChores, getRewards, getRequests, getSuggestions, verifyPin, getSettings, getPendingShoutouts } from './api'
 
 const TEXT_ZOOM = { small: 0.85, medium: 1, large: 1.15, big: 1.3 }
 
@@ -72,6 +72,7 @@ export default function App() {
   const [defaultPoints, setDefaultPoints] = useState(10)
   const [textSize, setTextSize] = useState(() => localStorage.getItem('cb-text-size') || 'medium')
   const [pendingShoutouts, setPendingShoutouts] = useState([])
+  const [suggestions, setSuggestions] = useState([])
 
   const toggleTheme = () => setIsDark(d => {
     const next = !d
@@ -97,13 +98,37 @@ export default function App() {
   }
 
   const refresh = useCallback(async () => {
-    const [k, c, ac, r, req, ps] = await Promise.all([getKids(), getChores(selectedDate), getAllChores(), getRewards(), getRequests(), getPendingShoutouts()])
-    setKids(k); setChores(c); setAllChores(ac); setRewards(r); setRequests(req); setPendingShoutouts(ps)
+    const [k, c, ac, r, req, ps, sg] = await Promise.all([getKids(), getChores(selectedDate), getAllChores(), getRewards(), getRequests(), getPendingShoutouts(), getSuggestions()])
+    setKids(k); setChores(c); setAllChores(ac); setRewards(r); setRequests(req); setPendingShoutouts(ps); setSuggestions(sg)
   }, [selectedDate])
 
   useEffect(() => { refresh() }, [refresh])
 
   const handleAdminClick = () => { setPinInput(''); setPinError(false); setShowPin(true) }
+
+  const adminTimeoutRef = useRef(null)
+
+  const resetAdminTimeout = useCallback(() => {
+    if (adminTimeoutRef.current) clearTimeout(adminTimeoutRef.current)
+    adminTimeoutRef.current = setTimeout(() => setView('board'), 5 * 60 * 1000)
+  }, [])
+
+  useEffect(() => {
+    if (view === 'admin') {
+      resetAdminTimeout()
+      window.addEventListener('pointerdown', resetAdminTimeout)
+      window.addEventListener('keydown', resetAdminTimeout)
+    } else {
+      clearTimeout(adminTimeoutRef.current)
+      window.removeEventListener('pointerdown', resetAdminTimeout)
+      window.removeEventListener('keydown', resetAdminTimeout)
+    }
+    return () => {
+      clearTimeout(adminTimeoutRef.current)
+      window.removeEventListener('pointerdown', resetAdminTimeout)
+      window.removeEventListener('keydown', resetAdminTimeout)
+    }
+  }, [view, resetAdminTimeout])
 
   const handlePin = async (digit) => {
     if (digit === 'del') { setPinInput(p => p.slice(0, -1)); return }
@@ -145,14 +170,14 @@ export default function App() {
           <button onClick={() => setView('rewards')} style={primaryBtnStyle(view==='rewards')}>Rewards</button>
           <button onClick={handleAdminClick} style={{ ...navBtn, fontSize:16, position:'relative' }}>
             Admin
-            {(requests.length > 0 || pendingShoutouts.length > 0) && <span style={{ position:'absolute', top:4, right:4, width:9, height:9, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
+            {(requests.length > 0 || pendingShoutouts.length > 0 || suggestions.length > 0) && <span style={{ position:'absolute', top:4, right:4, width:9, height:9, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
           </button>
         </div>
       </div>
 
       {view === 'board' && <Board kids={kids} chores={chores} requests={requests} selectedDate={selectedDate} onRefresh={refresh} showToast={showToast} />}
-      {view === 'rewards' && <RewardsView kids={kids} rewards={rewards} onRefresh={refresh} showToast={showToast} />}
-      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} pendingShoutouts={pendingShoutouts} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} textSize={textSize} onTextSizeChange={size => { setTextSize(size); localStorage.setItem('cb-text-size', size) }} onRefresh={refresh} showToast={showToast} setView={setView} />}
+      {view === 'rewards' && <RewardsView kids={kids} rewards={rewards} suggestions={suggestions} onRefresh={refresh} showToast={showToast} />}
+      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} suggestions={suggestions} pendingShoutouts={pendingShoutouts} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} textSize={textSize} onTextSizeChange={size => { setTextSize(size); localStorage.setItem('cb-text-size', size) }} onRefresh={refresh} showToast={showToast} setView={setView} />}
 
       {showPin && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 }}>

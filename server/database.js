@@ -76,6 +76,18 @@ db.exec(`
   );
 `)
 
+// Migrate: add reward_suggestions table if not present
+db.exec(`
+  CREATE TABLE IF NOT EXISTS reward_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kid_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (kid_id) REFERENCES kids(id)
+  );
+`)
+
 // Migrate: add acknowledged column if not present
 try { db.exec('ALTER TABLE redemption_requests ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0') } catch(_) {}
 // Migrate: add shoutout award columns if not present
