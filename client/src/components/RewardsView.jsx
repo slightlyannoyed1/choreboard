@@ -23,8 +23,8 @@ export default function RewardsView({ kids, rewards, suggestions, onRefresh, sho
   }
 
   return (
-    <div style={{ padding:20 }}>
-      <div style={{ display:'flex', gap:12, marginBottom:24, flexWrap:'wrap' }}>
+    <div style={{ padding:'12px 14px' }}>
+      <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
         {kids.map(k => (
           <button key={k.id} onClick={() => { setSelectedKid(k.id); setSuggesting(false); setSuggestionText('') }}
             style={{ padding:'12px 22px', borderRadius:24, border:`2px solid ${selectedKid===k.id?k.color:'var(--cb-border2)'}`, background: selectedKid===k.id?k.color+'22':'var(--cb-surface2)', color: selectedKid===k.id?k.color:'var(--cb-text-sub)', fontSize:18, fontWeight:600, cursor:'pointer' }}>
@@ -33,7 +33,7 @@ export default function RewardsView({ kids, rewards, suggestions, onRefresh, sho
         ))}
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(min(280px,100%),1fr))', gap:12 }}>
         {rewards.map(r => {
           const pct = kid ? Math.min((kid.points / r.points) * 100, 100) : 0
           const canAfford = kid && kid.points >= r.points

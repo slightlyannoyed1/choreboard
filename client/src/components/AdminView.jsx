@@ -19,12 +19,13 @@ const COLORS = ['#7F77DD','#1D9E75','#D85A30','#D4537E','#378ADD','#639922','#BA
 
 const TEXT_SIZES = ['small', 'medium', 'large', 'big']
 
-export default function AdminView({ kids, allChores, rewards, requests, suggestions, pendingShoutouts, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, textSize, onTextSizeChange, onRefresh, showToast, setView }) {
+export default function AdminView({ kids, allChores, rewards, requests, suggestions, pendingShoutouts, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, textSize, onTextSizeChange, isDark, onToggleTheme, onRefresh, showToast, setView }) {
   const [tab, setTab] = useState('pending')
   const [newKid, setNewKid] = useState({ name:'', emoji:'🦊', color:'#7F77DD' })
   const [newChore, setNewChore] = useState({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6' })
   const [newReward, setNewReward] = useState({ name:'', points:50 })
   const [editingKid, setEditingKid] = useState(null)
+  const [addingKid, setAddingKid] = useState(false)
   const [editingReward, setEditingReward] = useState(null)
   const [newPin, setNewPin] = useState('')
   const [pinSaved, setPinSaved] = useState(false)
@@ -132,9 +133,9 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                   </div>
                 ) : (
                   <div style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:12, padding:'16px 20px', marginBottom:10, gap:14 }}>
-                    <span style={{ fontSize:28 }}>{k.emoji}</span>
-                    <span style={{ flex:1, fontSize:20, color:'var(--cb-text)', fontWeight:600 }}>{k.name}</span>
-                    <span style={{ fontSize:17, color:'#7F77DD', fontWeight:600, marginRight:10 }}>{k.points} pts</span>
+                    <span style={{ fontSize:28, flexShrink:0, lineHeight:1 }}>{k.emoji}</span>
+                    <span style={{ flex:1, fontSize:20, color:'var(--cb-text)', fontWeight:600, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{k.name}</span>
+                    <span style={{ fontSize:17, color:'#7F77DD', fontWeight:600, marginRight:10, flexShrink:0, whiteSpace:'nowrap' }}>{k.points} pts</span>
                     <button onClick={()=>setEditingKid({id:k.id,name:k.name,emoji:k.emoji,color:k.color})}
                       style={{ background:'none', border:'none', color:'#7F77DD', cursor:'pointer', fontSize:22, padding:'0 8px' }}>✎</button>
                     <button onClick={async()=>{await deleteKid(k.id);onRefresh()}}
@@ -143,23 +144,30 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                 )}
               </div>
             ))}
-            <div style={{ marginTop:18, background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:12 }}>
-              <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Add kid</div>
-              <input value={newKid.name} onChange={e=>setNewKid({...newKid,name:e.target.value})} placeholder="Name" style={inputStyle} />
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                {EMOJIS.map(e=>(
-                  <button key={e} onClick={()=>setNewKid({...newKid,emoji:e})}
-                    style={{ fontSize:28, background: newKid.emoji===e?'var(--cb-border2)':'transparent', border:`1px solid ${newKid.emoji===e?'var(--cb-text-muted)':'transparent'}`, borderRadius:8, padding:'6px 8px', cursor:'pointer' }}>{e}</button>
-                ))}
+            {!addingKid ? (
+              <button onClick={() => setAddingKid(true)} style={{ marginTop:18, width:'100%', padding:'14px 0', background:'var(--cb-surface2)', border:'2px dashed var(--cb-border2)', borderRadius:12, color:'var(--cb-text-muted)', fontSize:17, fontWeight:600, cursor:'pointer' }}>+ Add Kid</button>
+            ) : (
+              <div style={{ marginTop:18, background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:12 }}>
+                <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Add kid</div>
+                <input value={newKid.name} onChange={e=>setNewKid({...newKid,name:e.target.value})} placeholder="Name" style={inputStyle} autoFocus />
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  {EMOJIS.map(e=>(
+                    <button key={e} onClick={()=>setNewKid({...newKid,emoji:e})}
+                      style={{ fontSize:28, background: newKid.emoji===e?'var(--cb-border2)':'transparent', border:`1px solid ${newKid.emoji===e?'var(--cb-text-muted)':'transparent'}`, borderRadius:8, padding:'6px 8px', cursor:'pointer' }}>{e}</button>
+                  ))}
+                </div>
+                <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                  {COLORS.map(c=>(
+                    <div key={c} onClick={()=>setNewKid({...newKid,color:c})}
+                      style={{ width:36, height:36, borderRadius:'50%', background:c, cursor:'pointer', outline: newKid.color===c?`3px solid ${c}`:'none', outlineOffset:3 }} />
+                  ))}
+                </div>
+                <div style={{ display:'flex', gap:10 }}>
+                  <button onClick={async () => { await addKid(); setAddingKid(false) }} style={{ ...addBtnStyle, flex:1 }}>Add Kid</button>
+                  <button onClick={() => { setAddingKid(false); setNewKid({ name:'', emoji:'🦊', color:'#7F77DD' }) }} style={{ flex:1, padding:'14px 0', background:'var(--cb-border)', border:'none', borderRadius:8, color:'var(--cb-text-sub)', fontSize:17, cursor:'pointer' }}>Cancel</button>
+                </div>
               </div>
-              <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-                {COLORS.map(c=>(
-                  <div key={c} onClick={()=>setNewKid({...newKid,color:c})}
-                    style={{ width:36, height:36, borderRadius:'50%', background:c, cursor:'pointer', outline: newKid.color===c?`3px solid ${c}`:'none', outlineOffset:3 }} />
-                ))}
-              </div>
-              <button onClick={addKid} style={addBtnStyle}>Add Kid</button>
-            </div>
+            )}
           </div>
         )}
 
@@ -248,27 +256,31 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                       {selectedKidShoutouts.map(s => {
                         const pts = shoutoutPoints[s.id] ?? defaultPoints
                         return (
-                          <div key={s.id} style={{ display:'flex', alignItems:'center', gap:10, background:'var(--cb-surface)', border:'1px solid var(--cb-border)', borderRadius:10, padding:'12px 14px' }}>
-                            <span style={{ fontSize:18, flexShrink:0 }}>⭐</span>
-                            <div style={{ flex:1 }}>
-                              <div style={{ fontSize:16, color:'var(--cb-text)', fontWeight:500 }}>{s.description}</div>
-                              <div style={{ fontSize:13, color:'var(--cb-text-faint)', marginTop:2 }}>{s.shoutout_date}</div>
+                          <div key={s.id} style={{ background:'var(--cb-surface)', border:'1px solid var(--cb-border)', borderRadius:10, padding:'12px 14px', display:'flex', flexDirection:'column', gap:8 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                              <span style={{ fontSize:18, flexShrink:0 }}>⭐</span>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:16, color:'var(--cb-text)', fontWeight:500 }}>{s.description}</div>
+                                <div style={{ fontSize:13, color:'var(--cb-text-faint)', marginTop:2 }}>{s.shoutout_date}</div>
+                              </div>
+                              <input type="number" min={1} value={pts}
+                                onChange={e => setShoutoutPoints(p => ({ ...p, [s.id]: Math.abs(parseInt(e.target.value)||0) }))}
+                                style={{ ...inputStyle, width:72, padding:'6px 8px', textAlign:'center' }} />
+                              <span style={{ fontSize:14, color:'var(--cb-text-muted)', flexShrink:0 }}>pts</span>
                             </div>
-                            <input type="number" min={1} value={pts}
-                              onChange={e => setShoutoutPoints(p => ({ ...p, [s.id]: Math.abs(parseInt(e.target.value)||0) }))}
-                              style={{ ...inputStyle, width:72, padding:'6px 8px', textAlign:'center' }} />
-                            <span style={{ fontSize:14, color:'var(--cb-text-muted)', flexShrink:0 }}>pts</span>
-                            <button onClick={async () => {
-                              const res = await awardShoutout(s.id, pts)
-                              if (res.ok) { onRefresh(); showToast(`+${pts} pts awarded!`) }
-                            }} style={{ padding:'8px 14px', borderRadius:8, border:'none', background:'#1D9E75', color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer', flexShrink:0 }}>Award</button>
-                            <button onClick={async () => {
-                              const res = await acknowledgeShoutout(s.id)
-                              if (res.ok) { onRefresh(); showToast('Shoutout recognized, no points') }
-                            }} style={{ padding:'8px 14px', borderRadius:8, border:'1px solid var(--cb-border2)', background:'transparent', color:'var(--cb-text-sub)', fontSize:14, fontWeight:700, cursor:'pointer', flexShrink:0 }}>No pts</button>
-                            <button onClick={async () => {
-                              await deleteShoutout(s.id); onRefresh(); showToast('Request rejected')
-                            }} style={{ padding:'8px 14px', borderRadius:8, border:'1px solid #E24B4A', background:'transparent', color:'#E24B4A', fontSize:14, fontWeight:700, cursor:'pointer', flexShrink:0 }}>Reject</button>
+                            <div style={{ display:'flex', gap:6 }}>
+                              <button onClick={async () => {
+                                const res = await awardShoutout(s.id, pts)
+                                if (res.ok) { onRefresh(); showToast(`+${pts} pts awarded!`) }
+                              }} style={{ flex:1, padding:'8px 0', borderRadius:8, border:'none', background:'#1D9E75', color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer' }}>Award</button>
+                              <button onClick={async () => {
+                                const res = await acknowledgeShoutout(s.id)
+                                if (res.ok) { onRefresh(); showToast('Shoutout recognized, no points') }
+                              }} style={{ flex:1, padding:'8px 0', borderRadius:8, border:'1px solid var(--cb-border2)', background:'transparent', color:'var(--cb-text-sub)', fontSize:14, fontWeight:700, cursor:'pointer' }}>No pts</button>
+                              <button onClick={async () => {
+                                await deleteShoutout(s.id); onRefresh(); showToast('Request rejected')
+                              }} style={{ flex:1, padding:'8px 0', borderRadius:8, border:'1px solid #E24B4A', background:'transparent', color:'#E24B4A', fontSize:14, fontWeight:700, cursor:'pointer' }}>Reject</button>
+                            </div>
                           </div>
                         )
                       })}
@@ -389,9 +401,11 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                     </div>
                   </div>
                 ) : (
-                  <div style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:12, padding:'16px 20px', marginBottom:10 }}>
-                    <span style={{ flex:1, fontSize:20, color:'var(--cb-text)', fontWeight:600 }}>{r.name}</span>
-                    <span style={{ fontSize:18, color:'#7F77DD', fontWeight:700, marginRight:10 }}>{r.points} pts</span>
+                  <div style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:12, padding:'16px 20px', marginBottom:10, gap:10 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:20, color:'var(--cb-text)', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.name}</div>
+                      <div style={{ fontSize:15, color:'#7F77DD', fontWeight:700, marginTop:2 }}>{r.points} pts</div>
+                    </div>
                     <button onClick={()=>setEditingReward({id:r.id,name:r.name,points:r.points})}
                       style={{ background:'none', border:'none', color:'#7F77DD', cursor:'pointer', fontSize:22, padding:'0 8px' }}>✎</button>
                     <button onClick={async()=>{await deleteReward(r.id);onRefresh()}}
@@ -426,14 +440,18 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
               const icon = entry.type === 'chore_complete' ? '✓' : entry.type === 'chore_uncomplete' ? '↩' : entry.type === 'prize_given' ? '🎁' : entry.type === 'points_added' ? '⬆' : entry.type === 'points_removed' ? '⬇' : '🏆'
               const iconColor = entry.type === 'chore_complete' ? '#1D9E75' : entry.type === 'chore_uncomplete' ? 'var(--cb-text-muted)' : entry.type === 'points_added' ? '#1D9E75' : entry.type === 'points_removed' ? '#E24B4A' : '#7F77DD'
               return (
-                <div key={entry.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 18px', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:10, marginBottom:7 }}>
-                  <span style={{ fontSize:18, color:iconColor, width:22, textAlign:'center', flexShrink:0 }}>{icon}</span>
-                  <span style={{ fontSize:16, color:'var(--cb-text-sub)', minWidth:110, flexShrink:0, fontWeight:600 }}>{entry.kid_name}</span>
-                  <span style={{ flex:1, fontSize:16, color:'var(--cb-text)' }}>{entry.description}</span>
-                  <span style={{ fontSize:16, fontWeight:700, color: entry.points > 0 ? '#1D9E75' : '#E24B4A', whiteSpace:'nowrap' }}>
-                    {entry.points > 0 ? '+' : ''}{entry.points} pts
-                  </span>
-                  <span style={{ fontSize:13, color:'var(--cb-text-faint)', whiteSpace:'nowrap', marginLeft:8 }}>{dateLabel}</span>
+                <div key={entry.id} style={{ padding:'12px 14px', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:10, marginBottom:7 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <span style={{ fontSize:18, color:iconColor, width:22, textAlign:'center', flexShrink:0 }}>{icon}</span>
+                    <span style={{ fontSize:15, color:'var(--cb-text-sub)', fontWeight:600, flexShrink:0 }}>{entry.kid_name}</span>
+                    <span style={{ fontSize:15, fontWeight:700, color: entry.points > 0 ? '#1D9E75' : '#E24B4A', whiteSpace:'nowrap', marginLeft:'auto' }}>
+                      {entry.points > 0 ? '+' : ''}{entry.points} pts
+                    </span>
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4, paddingLeft:32 }}>
+                    <span style={{ fontSize:15, color:'var(--cb-text)' }}>{entry.description}</span>
+                    <span style={{ fontSize:12, color:'var(--cb-text-faint)', whiteSpace:'nowrap', marginLeft:10, flexShrink:0 }}>{dateLabel}</span>
+                  </div>
                 </div>
               )
             })}
@@ -470,6 +488,14 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                   style={{...inputStyle, width:100}} />
                 <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>points (used when creating chores or adjusting points)</span>
               </div>
+            </div>
+
+            <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14, marginTop:14 }}>
+              <div style={{ fontSize:18, color:'var(--cb-text-sub)', fontWeight:700 }}>Appearance</div>
+              <button onClick={onToggleTheme}
+                style={{ alignSelf:'flex-start', padding:'10px 20px', borderRadius:8, border:'1px solid var(--cb-border2)', background:'var(--cb-surface)', color:'var(--cb-text)', fontSize:16, cursor:'pointer', fontWeight:600 }}>
+                {isDark ? '☀️  Switch to Light Mode' : '🌙  Switch to Dark Mode'}
+              </button>
             </div>
 
             <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14, marginTop:14 }}>

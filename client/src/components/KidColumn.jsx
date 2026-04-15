@@ -92,9 +92,9 @@ export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, se
         <div style={{ width:56, height:56, borderRadius:'50%', background: kid.color + '33', display:'flex', alignItems:'center', justifyContent:'center', fontSize:30, flexShrink:0 }}>{kid.emoji}</div>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:22, fontWeight:600, color:'var(--cb-text)' }}>{kid.name}</div>
-          <div style={{ fontSize:15, color:'var(--cb-text-sub)', marginTop:4 }}>
-            {done.length}/{chores.length} done &nbsp;
-            <span style={{ background: kid.color + '33', color: kid.color, padding:'3px 10px', borderRadius:20, fontSize:14, fontWeight:600 }}>{kid.points} pts</span>
+          <div style={{ fontSize:15, color:'var(--cb-text-sub)', marginTop:4, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+            <span>{done.length}/{chores.length} done</span>
+            <span style={{ background: kid.color + '33', color: kid.color, padding:'3px 10px', borderRadius:20, fontSize:14, fontWeight:600, whiteSpace:'nowrap', flexShrink:0 }}>{kid.points} pts</span>
           </div>
         </div>
         <button
