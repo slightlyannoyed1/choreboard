@@ -49,7 +49,7 @@ function burst(color) {
   draw()
 }
 
-export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, selectedDate, onRefresh, showToast }) {
+export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, selectedDate, onRefresh, showToast, formatPoints }) {
   const [adding, setAdding] = useState(false)
   const [text, setText] = useState('')
 
@@ -60,7 +60,7 @@ export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, se
     const res = await completeChore(chore.id, selectedDate)
     if (res.ok) {
       burst(kid.color)
-      showToast(`+${chore.points} pts for ${kid.name}!`)
+      showToast(`+${formatPoints(chore.points)} for ${kid.name}!`)
       onRefresh()
     }
   }
@@ -68,7 +68,7 @@ export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, se
   const handleUncomplete = async (chore) => {
     const res = await uncompleteChore(chore.id, selectedDate)
     if (res.ok) {
-      showToast(`-${chore.points} pts from ${kid.name}`)
+      showToast(`-${formatPoints(chore.points)} from ${kid.name}`)
       onRefresh()
     }
   }
@@ -94,7 +94,7 @@ export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, se
           <div style={{ fontSize:22, fontWeight:600, color:'var(--cb-text)' }}>{kid.name}</div>
           <div style={{ fontSize:15, color:'var(--cb-text-sub)', marginTop:4, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
             <span>{done.length}/{chores.length} done</span>
-            <span style={{ background: kid.color + '33', color: kid.color, padding:'3px 10px', borderRadius:20, fontSize:14, fontWeight:600, whiteSpace:'nowrap', flexShrink:0 }}>{kid.points} pts</span>
+            <span style={{ background: kid.color + '33', color: kid.color, padding:'3px 10px', borderRadius:20, fontSize:14, fontWeight:600, whiteSpace:'nowrap', flexShrink:0 }}>{formatPoints(kid.points)}</span>
           </div>
         </div>
         <button
@@ -155,7 +155,7 @@ export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, se
                 <span style={{ fontSize:22, flexShrink:0 }}>⭐</span>
                 <div style={{ flex:1, fontSize:16, color:'var(--cb-text)', fontWeight:500 }}>{s.description}</div>
                 {s.awarded_points > 0
-                  ? <span style={{ background: kid.color + '33', color: kid.color, padding:'3px 10px', borderRadius:20, fontSize:14, fontWeight:700, flexShrink:0 }}>+{s.awarded_points} pts</span>
+                  ? <span style={{ background: kid.color + '33', color: kid.color, padding:'3px 10px', borderRadius:20, fontSize:14, fontWeight:700, flexShrink:0 }}>+{formatPoints(s.awarded_points)}</span>
                   : s.awarded
                   ? <span style={{ color:'var(--cb-text-faint)', fontSize:13, flexShrink:0 }}>✓</span>
                   : <button onClick={() => handleDeleteShoutout(s.id)} title="Remove" style={{ background:'none', border:'none', color:'var(--cb-text-faint)', fontSize:16, cursor:'pointer', padding:'0 4px', lineHeight:1, flexShrink:0 }}>×</button>
@@ -172,7 +172,7 @@ export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, se
             <div style={{ width:36, height:36, borderRadius:'50%', border:`3px solid ${kid.color}66`, flexShrink:0 }} />
             <div style={{ flex:1 }}>
               <div style={{ fontSize:22, color:'var(--cb-text)', fontWeight:700 }}>{chore.name}</div>
-              <div style={{ fontSize:16, color:'var(--cb-text-muted)', marginTop:3 }}><span style={{ color: kid.color, fontWeight:700 }}>{chore.points} pts</span> · {recurringLabel(chore.recurring)}</div>
+              <div style={{ fontSize:16, color:'var(--cb-text-muted)', marginTop:3 }}><span style={{ color: kid.color, fontWeight:700 }}>{formatPoints(chore.points)}</span> · {recurringLabel(chore.recurring)}</div>
             </div>
             {chore.streak >= 2 && (
               <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
@@ -190,7 +190,7 @@ export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, se
             <div style={{ width:36, height:36, borderRadius:'50%', background: kid.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, color:'#fff', flexShrink:0 }}>✓</div>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:22, color:'var(--cb-text-dim)', fontWeight:700, textDecoration:'line-through' }}>{chore.name}</div>
-              <div style={{ fontSize:16, color:'var(--cb-text-faint)', marginTop:3 }}>{chore.points} pts · {recurringLabel(chore.recurring)}</div>
+              <div style={{ fontSize:16, color:'var(--cb-text-faint)', marginTop:3 }}>{formatPoints(chore.points)} · {recurringLabel(chore.recurring)}</div>
             </div>
             {chore.streak >= 2 && (
               <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createRequest, createSuggestion } from '../api'
 
-export default function RewardsView({ kids, rewards, suggestions, onRefresh, showToast }) {
+export default function RewardsView({ kids, rewards, suggestions, onRefresh, showToast, formatPoints, currencyMode, currencyRate }) {
   const [selectedKid, setSelectedKid] = useState(null)
   const [suggesting, setSuggesting] = useState(false)
   const [suggestionText, setSuggestionText] = useState('')
@@ -28,7 +28,7 @@ export default function RewardsView({ kids, rewards, suggestions, onRefresh, sho
         {kids.map(k => (
           <button key={k.id} onClick={() => { setSelectedKid(k.id); setSuggesting(false); setSuggestionText('') }}
             style={{ padding:'12px 22px', borderRadius:24, border:`2px solid ${selectedKid===k.id?k.color:'var(--cb-border2)'}`, background: selectedKid===k.id?k.color+'22':'var(--cb-surface2)', color: selectedKid===k.id?k.color:'var(--cb-text-sub)', fontSize:18, fontWeight:600, cursor:'pointer' }}>
-            {k.emoji} {k.name} <span style={{ fontSize:15, fontWeight:400 }}>({k.points}pts)</span>
+            {k.emoji} {k.name} <span style={{ fontSize:15, fontWeight:400 }}>({formatPoints(k.points)})</span>
           </button>
         ))}
       </div>
@@ -40,12 +40,17 @@ export default function RewardsView({ kids, rewards, suggestions, onRefresh, sho
           return (
             <div key={r.id} style={{ background:'var(--cb-surface)', border:'1px solid var(--cb-border)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14 }}>
               <div style={{ fontSize:20, color:'var(--cb-text)', fontWeight:700 }}>{r.name}</div>
-              <div><span style={{ fontSize:32, fontWeight:700, color:'#7F77DD' }}>{r.points}</span><span style={{ fontSize:16, color:'var(--cb-text-dim)' }}> pts</span></div>
+              <div>
+                {currencyMode === 'dollars'
+                  ? <span style={{ fontSize:32, fontWeight:700, color:'#7F77DD' }}>${(r.points * currencyRate).toFixed(2)}</span>
+                  : <><span style={{ fontSize:32, fontWeight:700, color:'#7F77DD' }}>{r.points}</span><span style={{ fontSize:16, color:'var(--cb-text-dim)' }}> pts</span></>
+                }
+              </div>
 
               {kid && (
                 <div>
                   <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, color:'var(--cb-text-dim)', marginBottom:6 }}>
-                    <span>{kid.points} pts</span>
+                    <span>{formatPoints(kid.points)}</span>
                     <span>{Math.round(pct)}%</span>
                   </div>
                   <div style={{ height:12, background:'var(--cb-border)', borderRadius:6, overflow:'hidden' }}>
@@ -56,7 +61,7 @@ export default function RewardsView({ kids, rewards, suggestions, onRefresh, sho
 
               <button onClick={() => handleClaim(r)} disabled={!kid || !canAfford}
                 style={{ padding:'14px 0', background: canAfford&&kid?'#534AB7':'var(--cb-surface2)', border:'none', borderRadius:8, color: canAfford&&kid?'#fff':'var(--cb-text-faint)', fontSize:17, cursor: canAfford&&kid?'pointer':'not-allowed', fontWeight:700 }}>
-                {!kid ? 'Select a kid' : canAfford ? '🏆 Claim Reward' : `Need ${r.points - kid.points} more pts`}
+                {!kid ? 'Select a kid' : canAfford ? '🏆 Claim Reward' : `Need ${formatPoints(r.points - kid.points)} more`}
               </button>
             </div>
           )

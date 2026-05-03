@@ -31,7 +31,15 @@ app.get('/api/settings', (_req, res) => {
   const tz = db.prepare('SELECT value FROM settings WHERE key=?').get('timezone')
   const dp = db.prepare('SELECT value FROM settings WHERE key=?').get('default_points')
   const ts = db.prepare('SELECT value FROM settings WHERE key=?').get('text_size')
-  res.json({ timezone: tz ? tz.value : 'America/New_York', default_points: dp ? parseInt(dp.value) : 10, text_size: ts ? ts.value : 'medium' })
+  const cm = db.prepare('SELECT value FROM settings WHERE key=?').get('currency_mode')
+  const cr = db.prepare('SELECT value FROM settings WHERE key=?').get('currency_rate')
+  res.json({
+    timezone: tz ? tz.value : 'America/New_York',
+    default_points: dp ? parseInt(dp.value) : 10,
+    text_size: ts ? ts.value : 'medium',
+    currency_mode: cm ? cm.value : 'points',
+    currency_rate: cr ? parseFloat(cr.value) : 0.05,
+  })
 })
 
 app.put('/api/settings/default-points', (req, res) => {
@@ -46,6 +54,21 @@ app.put('/api/settings/text-size', (req, res) => {
   const { size } = req.body
   if (!['small', 'medium', 'large', 'big'].includes(size)) return res.status(400).json({ error: 'Invalid size' })
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('text_size', size)
+  res.json({ ok: true })
+})
+
+app.put('/api/settings/currency-mode', (req, res) => {
+  const { mode } = req.body
+  if (!['points', 'dollars'].includes(mode)) return res.status(400).json({ error: 'Invalid mode' })
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('currency_mode', mode)
+  res.json({ ok: true })
+})
+
+app.put('/api/settings/currency-rate', (req, res) => {
+  const { rate } = req.body
+  const val = parseFloat(rate)
+  if (!isFinite(val) || val <= 0) return res.status(400).json({ error: 'Invalid rate' })
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('currency_rate', String(val))
   res.json({ ok: true })
 })
 

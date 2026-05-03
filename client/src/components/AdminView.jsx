@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, approveSuggestion, rejectSuggestion, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, adjustKidPoints, awardShoutout, acknowledgeShoutout, deleteShoutout } from '../api'
+import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, approveSuggestion, rejectSuggestion, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateCurrencyMode, updateCurrencyRate, adjustKidPoints, awardShoutout, acknowledgeShoutout, deleteShoutout } from '../api'
 
 const tzLabel = (tz) => {
   const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
@@ -19,7 +19,7 @@ const COLORS = ['#7F77DD','#1D9E75','#D85A30','#D4537E','#378ADD','#639922','#BA
 
 const TEXT_SIZES = ['small', 'medium', 'large', 'big']
 
-export default function AdminView({ kids, allChores, rewards, requests, suggestions, pendingShoutouts, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, textSize, onTextSizeChange, isDark, onToggleTheme, onRefresh, showToast, setView }) {
+export default function AdminView({ kids, allChores, rewards, requests, suggestions, pendingShoutouts, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, currencyMode, onCurrencyModeChange, currencyRate, onCurrencyRateChange, formatPoints, textSize, onTextSizeChange, isDark, onToggleTheme, onRefresh, showToast, setView }) {
   const [tab, setTab] = useState('pending')
   const [newKid, setNewKid] = useState({ name:'', emoji:'🦊', color:'#7F77DD' })
   const [newChore, setNewChore] = useState({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6' })
@@ -84,7 +84,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
     const delta = sign * (parseInt(pointsDelta) || 0)
     if (delta === 0) return
     const res = await adjustKidPoints(pointsKidId, { delta, reason: pointsReason || undefined })
-    if (res.ok) { onRefresh(); showToast(`${delta > 0 ? '+' : ''}${delta} pts applied!`); setPointsReason('') }
+    if (res.ok) { onRefresh(); showToast(`${delta > 0 ? '+' : ''}${formatPoints(delta)} applied!`); setPointsReason('') }
   }
 
   const tabs = ['kids', 'chores', 'rewards', 'points', 'settings', 'log']
@@ -135,7 +135,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                   <div style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:12, padding:'16px 20px', marginBottom:10, gap:14 }}>
                     <span style={{ fontSize:28, flexShrink:0, lineHeight:1 }}>{k.emoji}</span>
                     <span style={{ flex:1, fontSize:20, color:'var(--cb-text)', fontWeight:600, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{k.name}</span>
-                    <span style={{ fontSize:17, color:'#7F77DD', fontWeight:600, marginRight:10, flexShrink:0, whiteSpace:'nowrap' }}>{k.points} pts</span>
+                    <span style={{ fontSize:17, color:'#7F77DD', fontWeight:600, marginRight:10, flexShrink:0, whiteSpace:'nowrap' }}>{formatPoints(k.points)}</span>
                     <button onClick={()=>setEditingKid({id:k.id,name:k.name,emoji:k.emoji,color:k.color})}
                       style={{ background:'none', border:'none', color:'#7F77DD', cursor:'pointer', fontSize:22, padding:'0 8px' }}>✎</button>
                     <button onClick={async()=>{await deleteKid(k.id);onRefresh()}}
@@ -179,7 +179,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                 {allChores.filter(c=>c.kid_id===kid.id).map(c=>(
                   <div key={c.id} style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:10, padding:'14px 18px', marginBottom:8 }}>
                     <span style={{ flex:1, fontSize:18, color:'var(--cb-text)', fontWeight:600 }}>{c.name}</span>
-                    <span style={{ fontSize:15, color:'var(--cb-text-muted)', marginRight:16 }}>{c.points}pts · {recurringLabel(c.recurring)}</span>
+                    <span style={{ fontSize:15, color:'var(--cb-text-muted)', marginRight:16 }}>{formatPoints(c.points)} · {recurringLabel(c.recurring)}</span>
                     <button onClick={async()=>{await deleteChore(c.id);onRefresh()}}
                       style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22 }}>&#x2715;</button>
                   </div>
@@ -208,7 +208,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
               <input value={newChore.name} onChange={e=>setNewChore({...newChore,name:e.target.value})} placeholder="Chore name" style={inputStyle} />
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <input type="number" value={newChore.points} onChange={e=>setNewChore({...newChore,points:parseInt(e.target.value)||0})} style={{...inputStyle, width:100}} />
-                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Reward Points</span>
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Reward Points{currencyMode === 'dollars' && ` (= ${formatPoints(newChore.points)})`}</span>
               </div>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d,i) => {
@@ -266,12 +266,12 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                               <input type="number" min={1} value={pts}
                                 onChange={e => setShoutoutPoints(p => ({ ...p, [s.id]: Math.abs(parseInt(e.target.value)||0) }))}
                                 style={{ ...inputStyle, width:72, padding:'6px 8px', textAlign:'center' }} />
-                              <span style={{ fontSize:14, color:'var(--cb-text-muted)', flexShrink:0 }}>pts</span>
+                              <span style={{ fontSize:14, color:'var(--cb-text-muted)', flexShrink:0 }}>pts{currencyMode === 'dollars' && ` (${formatPoints(pts)})`}</span>
                             </div>
                             <div style={{ display:'flex', gap:6 }}>
                               <button onClick={async () => {
                                 const res = await awardShoutout(s.id, pts)
-                                if (res.ok) { onRefresh(); showToast(`+${pts} pts awarded!`) }
+                                if (res.ok) { onRefresh(); showToast(`+${formatPoints(pts)} awarded!`) }
                               }} style={{ flex:1, padding:'8px 0', borderRadius:8, border:'none', background:'#1D9E75', color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer' }}>Award</button>
                               <button onClick={async () => {
                                 const res = await acknowledgeShoutout(s.id)
@@ -301,7 +301,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                     <button key={k.id} type="button" onClick={() => setPointsKidId(String(k.id))}
                       style={{ padding:'10px 14px', borderRadius:8, border:'none', background: active?'#7F77DD':'var(--cb-border)', color: active?'#ffffff':'var(--cb-text-faint)', fontSize:15, fontWeight:700, cursor:'pointer', opacity: active?1:0.6, position:'relative' }}>
                       {k.emoji} {k.name}
-                      <span style={{ marginLeft:8, fontWeight:400, opacity: active?1:0.7 }}>{k.points} pts</span>
+                      <span style={{ marginLeft:8, fontWeight:400, opacity: active?1:0.7 }}>{formatPoints(k.points)}</span>
                       {hasPending && <span style={{ position:'absolute', top:4, right:4, width:7, height:7, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
                     </button>
                   )
@@ -310,7 +310,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <input type="number" value={pointsDelta} min={1} onChange={e=>setPointsDelta(Math.abs(parseInt(e.target.value)||0))}
                   style={{...inputStyle, width:100}} />
-                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points</span>
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points{currencyMode === 'dollars' && ` (= ${formatPoints(pointsDelta)})`}</span>
               </div>
               <input value={pointsReason} onChange={e=>setPointsReason(e.target.value)} placeholder="Reason (optional)" style={inputStyle} />
               <div style={{ display:'flex', gap:10 }}>
@@ -343,7 +343,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                         <input type="number" min={1} value={pts}
                           onChange={e => setSuggestionPoints(p => ({ ...p, [s.id]: Math.abs(parseInt(e.target.value)||0) }))}
                           style={{ ...inputStyle, width:90, padding:'8px 10px' }} />
-                        <span style={{ fontSize:15, color:'var(--cb-text-muted)' }}>pts to approve</span>
+                        <span style={{ fontSize:15, color:'var(--cb-text-muted)' }}>pts to approve{currencyMode === 'dollars' && ` (${formatPoints(pts)})`}</span>
                       </div>
                       <div style={{ display:'flex', gap:10 }}>
                         <button onClick={async () => { const res = await approveSuggestion(s.id, pts); if (res.ok) { onRefresh(); showToast(`Added "${s.name}"!`) } }}
@@ -369,7 +369,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                       <span style={{ fontSize:26 }}>🏆</span>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:18, color:'var(--cb-text)', fontWeight:700 }}>{r.reward_name}</div>
-                        <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginTop:2 }}>{r.kid_name} · {r.reward_points} pts</div>
+                        <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginTop:2 }}>{r.kid_name} · {formatPoints(r.reward_points)}</div>
                       </div>
                     </div>
                     <div style={{ display:'flex', gap:10 }}>
@@ -393,7 +393,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                     <input value={editingReward.name} onChange={e=>setEditingReward({...editingReward,name:e.target.value})} placeholder="Reward name" style={inputStyle} />
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                       <input type="number" value={editingReward.points} onChange={e=>setEditingReward({...editingReward,points:parseInt(e.target.value)||0})} style={{...inputStyle, width:100}} />
-                      <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points cost</span>
+                      <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points cost{currencyMode === 'dollars' && ` (= ${formatPoints(editingReward.points)})`}</span>
                     </div>
                     <div style={{ display:'flex', gap:10 }}>
                       <button onClick={saveReward} style={{ ...addBtnStyle, flex:1 }}>Save</button>
@@ -404,7 +404,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                   <div style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:12, padding:'16px 20px', marginBottom:10, gap:10 }}>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:20, color:'var(--cb-text)', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.name}</div>
-                      <div style={{ fontSize:15, color:'#7F77DD', fontWeight:700, marginTop:2 }}>{r.points} pts</div>
+                      <div style={{ fontSize:15, color:'#7F77DD', fontWeight:700, marginTop:2 }}>{formatPoints(r.points)}</div>
                     </div>
                     <button onClick={()=>setEditingReward({id:r.id,name:r.name,points:r.points})}
                       style={{ background:'none', border:'none', color:'#7F77DD', cursor:'pointer', fontSize:22, padding:'0 8px' }}>✎</button>
@@ -417,7 +417,10 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
             <div style={{ marginTop:18, background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:12 }}>
               <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Add reward</div>
               <input value={newReward.name} onChange={e=>setNewReward({...newReward,name:e.target.value})} placeholder="Reward name" style={inputStyle} />
-              <input type="number" value={newReward.points} onChange={e=>setNewReward({...newReward,points:parseInt(e.target.value)||0})} placeholder="Points cost" style={inputStyle} />
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <input type="number" value={newReward.points} onChange={e=>setNewReward({...newReward,points:parseInt(e.target.value)||0})} placeholder="Points cost" style={{...inputStyle, width:100}} />
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points cost{currencyMode === 'dollars' && ` (= ${formatPoints(newReward.points)})`}</span>
+              </div>
               <button onClick={addReward} style={addBtnStyle}>Add Reward</button>
             </div>
           </div>
@@ -445,7 +448,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                     <span style={{ fontSize:18, color:iconColor, width:22, textAlign:'center', flexShrink:0 }}>{icon}</span>
                     <span style={{ fontSize:15, color:'var(--cb-text-sub)', fontWeight:600, flexShrink:0 }}>{entry.kid_name}</span>
                     <span style={{ fontSize:15, fontWeight:700, color: entry.points > 0 ? '#1D9E75' : '#E24B4A', whiteSpace:'nowrap', marginLeft:'auto' }}>
-                      {entry.points > 0 ? '+' : ''}{entry.points} pts
+                      {entry.points > 0 ? '+' : ''}{formatPoints(entry.points)}
                     </span>
                   </div>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4, paddingLeft:32 }}>
@@ -487,6 +490,35 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                   }}
                   style={{...inputStyle, width:100}} />
                 <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>points (used when creating chores or adjusting points)</span>
+              </div>
+            </div>
+
+            <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14, marginTop:14 }}>
+              <div style={{ fontSize:18, color:'var(--cb-text-sub)', fontWeight:700 }}>Display Mode</div>
+              <div style={{ display:'flex', gap:8 }}>
+                {['points', 'dollars'].map(m => (
+                  <button key={m} onClick={async () => {
+                    if (currencyMode === m) return
+                    const res = await updateCurrencyMode(m)
+                    if (res.ok) { onCurrencyModeChange(m); showToast(`Now showing ${m}`) }
+                  }} style={{ flex:1, padding:'10px 0', borderRadius:8, border:`2px solid ${currencyMode === m ? '#7F77DD' : 'var(--cb-border2)'}`, background: currencyMode === m ? '#7F77DD' : 'var(--cb-surface)', color: currencyMode === m ? '#fff' : 'var(--cb-text-sub)', fontSize:15, fontWeight:600, cursor:'pointer', textTransform:'capitalize' }}>
+                    {m}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize:15, color:'var(--cb-text-muted)' }}>Currency rate</div>
+              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                <span style={{ fontSize:16, color:'var(--cb-text)' }}>100 points = $</span>
+                <input type="number" step="0.01" min="0.01"
+                  defaultValue={(currencyRate * 100).toFixed(2)} key={currencyRate}
+                  onBlur={async e => {
+                    const dollars = parseFloat(e.target.value)
+                    if (!isFinite(dollars) || dollars <= 0) return
+                    const newRate = dollars / 100
+                    const res = await updateCurrencyRate(newRate)
+                    if (res.ok) { onCurrencyRateChange(newRate); showToast('Currency rate updated!') }
+                  }}
+                  style={{...inputStyle, width:110}} />
               </div>
             </div>
 

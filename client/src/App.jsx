@@ -73,6 +73,8 @@ export default function App() {
   const [timezone, setTimezone] = useState('America/New_York')
   const [isDark, setIsDark] = useState(() => localStorage.getItem('cb-theme') !== 'light')
   const [defaultPoints, setDefaultPoints] = useState(10)
+  const [currencyMode, setCurrencyMode] = useState('points')
+  const [currencyRate, setCurrencyRate] = useState(0.05)
   const [textSize, setTextSize] = useState(() => localStorage.getItem('cb-text-size') || 'medium')
   const [pendingShoutouts, setPendingShoutouts] = useState([])
   const [suggestions, setSuggestions] = useState([])
@@ -109,8 +111,18 @@ export default function App() {
     getSettings().then(s => {
       if (s.timezone) setTimezone(s.timezone)
       if (s.default_points) setDefaultPoints(s.default_points)
+      if (s.currency_mode) setCurrencyMode(s.currency_mode)
+      if (s.currency_rate) setCurrencyRate(s.currency_rate)
     })
   }, [])
+
+  const formatPoints = useCallback((points) => {
+    if (currencyMode === 'dollars') {
+      const d = points * currencyRate
+      return d < 0 ? `-$${Math.abs(d).toFixed(2)}` : `$${d.toFixed(2)}`
+    }
+    return `${points} pts`
+  }, [currencyMode, currencyRate])
 
   const showToast = (msg) => {
     setToast(msg)
@@ -235,9 +247,9 @@ export default function App() {
         </div>
       )}
 
-      {view === 'board' && <Board kids={kids} chores={chores} requests={requests} selectedDate={selectedDate} onRefresh={refresh} showToast={showToast} />}
-      {view === 'rewards' && <RewardsView kids={kids} rewards={rewards} suggestions={suggestions} onRefresh={refresh} showToast={showToast} />}
-      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} suggestions={suggestions} pendingShoutouts={pendingShoutouts} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} textSize={textSize} onTextSizeChange={size => { setTextSize(size); localStorage.setItem('cb-text-size', size) }} isDark={isDark} onToggleTheme={toggleTheme} onRefresh={refresh} showToast={showToast} setView={setView} />}
+      {view === 'board' && <Board kids={kids} chores={chores} requests={requests} selectedDate={selectedDate} onRefresh={refresh} showToast={showToast} formatPoints={formatPoints} />}
+      {view === 'rewards' && <RewardsView kids={kids} rewards={rewards} suggestions={suggestions} onRefresh={refresh} showToast={showToast} formatPoints={formatPoints} currencyMode={currencyMode} currencyRate={currencyRate} />}
+      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} suggestions={suggestions} pendingShoutouts={pendingShoutouts} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} currencyMode={currencyMode} onCurrencyModeChange={setCurrencyMode} currencyRate={currencyRate} onCurrencyRateChange={setCurrencyRate} formatPoints={formatPoints} textSize={textSize} onTextSizeChange={size => { setTextSize(size); localStorage.setItem('cb-text-size', size) }} isDark={isDark} onToggleTheme={toggleTheme} onRefresh={refresh} showToast={showToast} setView={setView} />}
 
       {showPin && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 }}>
