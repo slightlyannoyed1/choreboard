@@ -95,7 +95,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
         {tabs.map(t => (
           <div key={t} onClick={() => setTab(t)}
             style={{ padding:'16px 20px', fontSize:17, fontWeight: tab===t?700:400, color: tab===t?'#7F77DD':'var(--cb-text-muted)', borderBottom:`3px solid ${tab===t?'#7F77DD':'transparent'}`, cursor:'pointer', textTransform:'capitalize', whiteSpace:'nowrap', position:'relative' }}>
-            {t}
+            {t === 'points' && currencyMode === 'dollars' ? 'money' : t}
             {t==='rewards'&&(requests.length>0||suggestions.length>0)&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
             {t==='points'&&pendingShoutouts.length>0&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
           </div>
@@ -207,8 +207,8 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
               </div>
               <input value={newChore.name} onChange={e=>setNewChore({...newChore,name:e.target.value})} placeholder="Chore name" style={inputStyle} />
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <input type="number" value={newChore.points} onChange={e=>setNewChore({...newChore,points:parseInt(e.target.value)||0})} style={{...inputStyle, width:100}} />
-                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Reward Points{currencyMode === 'dollars' && ` (= ${formatPoints(newChore.points)})`}</span>
+                <AmountInput points={newChore.points} onPoints={v=>setNewChore({...newChore,points:v})} currencyMode={currencyMode} currencyRate={currencyRate} />
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>{currencyMode === 'dollars' ? 'Reward amount' : 'Reward Points'}</span>
               </div>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d,i) => {
@@ -263,10 +263,8 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                                 <div style={{ fontSize:16, color:'var(--cb-text)', fontWeight:500 }}>{s.description}</div>
                                 <div style={{ fontSize:13, color:'var(--cb-text-faint)', marginTop:2 }}>{s.shoutout_date}</div>
                               </div>
-                              <input type="number" min={1} value={pts}
-                                onChange={e => setShoutoutPoints(p => ({ ...p, [s.id]: Math.abs(parseInt(e.target.value)||0) }))}
-                                style={{ ...inputStyle, width:72, padding:'6px 8px', textAlign:'center' }} />
-                              <span style={{ fontSize:14, color:'var(--cb-text-muted)', flexShrink:0 }}>pts{currencyMode === 'dollars' && ` (${formatPoints(pts)})`}</span>
+                              <AmountInput points={pts} onPoints={v=>setShoutoutPoints(p=>({ ...p, [s.id]: v }))} currencyMode={currencyMode} currencyRate={currencyRate} width={84} />
+                              <span style={{ fontSize:14, color:'var(--cb-text-muted)', flexShrink:0 }}>{currencyMode === 'dollars' ? 'to award' : 'pts'}</span>
                             </div>
                             <div style={{ display:'flex', gap:6 }}>
                               <button onClick={async () => {
@@ -308,16 +306,15 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                 })}
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <input type="number" value={pointsDelta} min={1} onChange={e=>setPointsDelta(Math.abs(parseInt(e.target.value)||0))}
-                  style={{...inputStyle, width:100}} />
-                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points{currencyMode === 'dollars' && ` (= ${formatPoints(pointsDelta)})`}</span>
+                <AmountInput points={pointsDelta} onPoints={setPointsDelta} currencyMode={currencyMode} currencyRate={currencyRate} />
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>{currencyMode === 'dollars' ? 'Amount' : 'Points'}</span>
               </div>
               <input value={pointsReason} onChange={e=>setPointsReason(e.target.value)} placeholder="Reason (optional)" style={inputStyle} />
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={() => applyPoints(1)}
-                  style={{ flex:1, padding:'14px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>+ Add Points</button>
+                  style={{ flex:1, padding:'14px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>+ Add {currencyMode === 'dollars' ? 'Money' : 'Points'}</button>
                 <button onClick={() => applyPoints(-1)}
-                  style={{ flex:1, padding:'14px 0', background:'#E24B4A', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>- Remove Points</button>
+                  style={{ flex:1, padding:'14px 0', background:'#E24B4A', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>- Remove {currencyMode === 'dollars' ? 'Money' : 'Points'}</button>
               </div>
             </div>
           </div>
@@ -340,10 +337,8 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                         </div>
                       </div>
                       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:10 }}>
-                        <input type="number" min={1} value={pts}
-                          onChange={e => setSuggestionPoints(p => ({ ...p, [s.id]: Math.abs(parseInt(e.target.value)||0) }))}
-                          style={{ ...inputStyle, width:90, padding:'8px 10px' }} />
-                        <span style={{ fontSize:15, color:'var(--cb-text-muted)' }}>pts to approve{currencyMode === 'dollars' && ` (${formatPoints(pts)})`}</span>
+                        <AmountInput points={pts} onPoints={v=>setSuggestionPoints(p=>({ ...p, [s.id]: v }))} currencyMode={currencyMode} currencyRate={currencyRate} width={100} />
+                        <span style={{ fontSize:15, color:'var(--cb-text-muted)' }}>{currencyMode === 'dollars' ? 'to approve' : 'pts to approve'}</span>
                       </div>
                       <div style={{ display:'flex', gap:10 }}>
                         <button onClick={async () => { const res = await approveSuggestion(s.id, pts); if (res.ok) { onRefresh(); showToast(`Added "${s.name}"!`) } }}
@@ -392,8 +387,8 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                   <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, marginBottom:10, display:'flex', flexDirection:'column', gap:12 }}>
                     <input value={editingReward.name} onChange={e=>setEditingReward({...editingReward,name:e.target.value})} placeholder="Reward name" style={inputStyle} />
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                      <input type="number" value={editingReward.points} onChange={e=>setEditingReward({...editingReward,points:parseInt(e.target.value)||0})} style={{...inputStyle, width:100}} />
-                      <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points cost{currencyMode === 'dollars' && ` (= ${formatPoints(editingReward.points)})`}</span>
+                      <AmountInput points={editingReward.points} onPoints={v=>setEditingReward({...editingReward,points:v})} currencyMode={currencyMode} currencyRate={currencyRate} />
+                      <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>{currencyMode === 'dollars' ? 'Cost' : 'Points cost'}</span>
                     </div>
                     <div style={{ display:'flex', gap:10 }}>
                       <button onClick={saveReward} style={{ ...addBtnStyle, flex:1 }}>Save</button>
@@ -418,8 +413,8 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
               <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Add reward</div>
               <input value={newReward.name} onChange={e=>setNewReward({...newReward,name:e.target.value})} placeholder="Reward name" style={inputStyle} />
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <input type="number" value={newReward.points} onChange={e=>setNewReward({...newReward,points:parseInt(e.target.value)||0})} placeholder="Points cost" style={{...inputStyle, width:100}} />
-                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>Points cost{currencyMode === 'dollars' && ` (= ${formatPoints(newReward.points)})`}</span>
+                <AmountInput points={newReward.points} onPoints={v=>setNewReward({...newReward,points:v})} currencyMode={currencyMode} currencyRate={currencyRate} />
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>{currencyMode === 'dollars' ? 'Cost' : 'Points cost'}</span>
               </div>
               <button onClick={addReward} style={addBtnStyle}>Add Reward</button>
             </div>
@@ -479,17 +474,15 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
             </div>
 
             <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14, marginTop:14 }}>
-              <div style={{ fontSize:18, color:'var(--cb-text-sub)', fontWeight:700 }}>Default Points</div>
+              <div style={{ fontSize:18, color:'var(--cb-text-sub)', fontWeight:700 }}>{currencyMode === 'dollars' ? 'Default Amount' : 'Default Points'}</div>
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <input type="number" defaultValue={defaultPoints} key={defaultPoints} min={1}
-                  onBlur={async e => {
-                    const val = parseInt(e.target.value)
+                <AmountInput points={defaultPoints} onPoints={onDefaultPointsChange} currencyMode={currencyMode} currencyRate={currencyRate}
+                  onCommit={async val => {
                     if (!val || val < 1) return
                     const res = await updateDefaultPoints(val)
-                    if (res.ok) { onDefaultPointsChange(val); showToast('Default points updated!') }
-                  }}
-                  style={{...inputStyle, width:100}} />
-                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>points (used when creating chores or adjusting points)</span>
+                    if (res.ok) { onDefaultPointsChange(val); showToast('Default updated!') }
+                  }} />
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>{currencyMode === 'dollars' ? '(used when creating chores or adjusting)' : 'points (used when creating chores or adjusting points)'}</span>
               </div>
             </div>
 
@@ -572,3 +565,31 @@ function recurringLabel(recurring) {
 
 const inputStyle = { padding:'13px 14px', background:'var(--cb-input-bg)', border:'1px solid var(--cb-border2)', borderRadius:8, color:'var(--cb-text)', fontSize:17, width:'100%', boxSizing:'border-box' }
 const addBtnStyle = { padding:'14px 0', background:'#7F77DD', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }
+
+// Numeric input that shows and accepts dollars in dollars mode (with a $ prefix)
+// and whole points in points mode. Always emits the stored value in points, so
+// callers never deal with the conversion or do the math themselves.
+function AmountInput({ points, onPoints, onCommit, currencyMode, currencyRate, width = 100 }) {
+  const dollars = currencyMode === 'dollars'
+  const fmt = pts => dollars ? (Number(pts || 0) * currencyRate).toFixed(2) : String(pts ?? 0)
+  const parse = str => {
+    const n = parseFloat(str)
+    if (!isFinite(n)) return 0
+    return Math.max(0, Math.round(dollars ? n / currencyRate : n))
+  }
+  const [draft, setDraft] = useState(() => fmt(points))
+  const [focused, setFocused] = useState(false)
+  // Re-sync the field from the stored value only while the user isn't typing,
+  // so switching modes or external changes reformat it, but decimals type freely.
+  useEffect(() => { if (!focused) setDraft(fmt(points)) }, [points, currencyMode, currencyRate, focused])
+  return (
+    <div style={{ position:'relative', width, flexShrink:0 }}>
+      {dollars && <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'var(--cb-text-muted)', fontSize:17, pointerEvents:'none' }}>$</span>}
+      <input type="text" inputMode="decimal" value={draft}
+        onFocus={() => setFocused(true)}
+        onChange={e => { setDraft(e.target.value); onPoints && onPoints(parse(e.target.value)) }}
+        onBlur={() => { setFocused(false); const p = parse(draft); onPoints && onPoints(p); onCommit && onCommit(p) }}
+        style={{ ...inputStyle, paddingLeft: dollars ? 24 : 14 }} />
+    </div>
+  )
+}
