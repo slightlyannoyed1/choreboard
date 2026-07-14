@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, approveSuggestion, rejectSuggestion, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateCurrencyMode, updateCurrencyRate, adjustKidPoints, awardShoutout, acknowledgeShoutout, deleteShoutout } from '../api'
+import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, approveSuggestion, rejectSuggestion, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateCurrencyMode, updateCurrencyRate, adjustKidPoints, awardShoutout, acknowledgeShoutout, deleteShoutout, setChoreHabit, resolveMastery, reviveChore, restartChore, updateHabitSettings } from '../api'
+import HabitMeter from './HabitMeter'
 
 const tzLabel = (tz) => {
   const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
@@ -19,10 +20,10 @@ const COLORS = ['#7F77DD','#1D9E75','#D85A30','#D4537E','#378ADD','#639922','#BA
 
 const TEXT_SIZES = ['small', 'medium', 'large', 'big']
 
-export default function AdminView({ kids, allChores, rewards, requests, suggestions, pendingShoutouts, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, currencyMode, onCurrencyModeChange, currencyRate, onCurrencyRateChange, formatPoints, textSize, onTextSizeChange, isDark, onToggleTheme, onRefresh, showToast, setView }) {
+export default function AdminView({ kids, allChores, rewards, requests, suggestions, pendingShoutouts, masteredChores, deadChores, habitSettings, onHabitSettingsChange, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, currencyMode, onCurrencyModeChange, currencyRate, onCurrencyRateChange, formatPoints, textSize, onTextSizeChange, isDark, onToggleTheme, onRefresh, showToast, setView }) {
   const [tab, setTab] = useState('pending')
   const [newKid, setNewKid] = useState({ name:'', emoji:'🦊', color:'#7F77DD' })
-  const [newChore, setNewChore] = useState({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6' })
+  const [newChore, setNewChore] = useState({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6', habit_enabled:false })
   const [newReward, setNewReward] = useState({ name:'', points:50 })
   const [editingKid, setEditingKid] = useState(null)
   const [addingKid, setAddingKid] = useState(false)
@@ -53,7 +54,23 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
     if (!newChore.kid_ids.length || !newChore.name) return
     await Promise.all(newChore.kid_ids.map(kid_id => createChore({ ...newChore, kid_id })))
     onRefresh(); showToast('Chore added!')
-    setNewChore({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6' })
+    setNewChore({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6', habit_enabled:false })
+  }
+
+  const toggleHabit = async (chore) => {
+    const enabled = !chore.habit_enabled
+    const res = await setChoreHabit(chore.id, { enabled })
+    if (res.ok) {
+      onRefresh()
+      showToast(enabled ? `"${chore.name}" is now a tracked habit` : `Habit tracking off for "${chore.name}"`)
+    }
+  }
+
+  const saveHabitSettings = async (patch) => {
+    const next = { ...habitSettings, ...patch }
+    const res = await updateHabitSettings(patch)
+    if (res.ok) { onHabitSettingsChange(next); showToast('Habit settings updated!') }
+    else showToast(res.error || 'Invalid value')
   }
 
   const saveReward = async () => {
@@ -87,7 +104,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
     if (res.ok) { onRefresh(); showToast(`${delta > 0 ? '+' : ''}${formatPoints(delta)} applied!`); setPointsReason('') }
   }
 
-  const tabs = ['kids', 'chores', 'rewards', 'points', 'settings', 'log']
+  const tabs = ['kids', 'chores', 'habits', 'rewards', 'points', 'settings', 'log']
 
   return (
     <div>
@@ -98,6 +115,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
             {t === 'points' && currencyMode === 'dollars' ? 'money' : t}
             {t==='rewards'&&(requests.length>0||suggestions.length>0)&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
             {t==='points'&&pendingShoutouts.length>0&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
+            {t==='habits'&&masteredChores.length>0&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
           </div>
         ))}
         <div style={{ marginLeft:'auto', padding:'10px 0', flexShrink:0 }}>
@@ -177,11 +195,21 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
               <div key={kid.id} style={{ marginBottom:24 }}>
                 <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>{kid.emoji} {kid.name}</div>
                 {allChores.filter(c=>c.kid_id===kid.id).map(c=>(
-                  <div key={c.id} style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:10, padding:'14px 18px', marginBottom:8 }}>
-                    <span style={{ flex:1, fontSize:18, color:'var(--cb-text)', fontWeight:600 }}>{c.name}</span>
-                    <span style={{ fontSize:15, color:'var(--cb-text-muted)', marginRight:16 }}>{formatPoints(c.points)} · {recurringLabel(c.recurring)}</span>
-                    <button onClick={async()=>{await deleteChore(c.id);onRefresh()}}
-                      style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22 }}>&#x2715;</button>
+                  <div key={c.id} style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:10, padding:'14px 18px', marginBottom:8 }}>
+                    <div style={{ display:'flex', alignItems:'center' }}>
+                      <span style={{ flex:1, fontSize:18, color:'var(--cb-text)', fontWeight:600, minWidth:0 }}>
+                        {c.name}
+                        {c.state === 'dead' && <span style={{ marginLeft:8, fontSize:13, color:'#E24B4A', fontWeight:700 }}>💀 dead</span>}
+                      </span>
+                      <span style={{ fontSize:15, color:'var(--cb-text-muted)', marginRight:12, flexShrink:0 }}>{formatPoints(c.points)} · {recurringLabel(c.recurring)}</span>
+                      <button onClick={() => toggleHabit(c)} title={c.habit_enabled ? 'Stop tracking as a habit' : 'Track as a habit (value decays as it becomes routine)'}
+                        style={{ padding:'6px 10px', marginRight:6, borderRadius:20, border:`1px solid ${c.habit_enabled ? '#1D9E75' : 'var(--cb-border2)'}`, background: c.habit_enabled ? '#1D9E7522' : 'transparent', color: c.habit_enabled ? '#1D9E75' : 'var(--cb-text-dim)', fontSize:13, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+                        🌱 Habit {c.habit_enabled ? 'on' : 'off'}
+                      </button>
+                      <button onClick={async()=>{await deleteChore(c.id);onRefresh()}}
+                        style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22, flexShrink:0 }}>&#x2715;</button>
+                    </div>
+                    {c.habit_enabled && <HabitMeter chore={c} color={kid.color} />}
                   </div>
                 ))}
                 {allChores.filter(c=>c.kid_id===kid.id).length === 0 && (
@@ -224,7 +252,118 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                   )
                 })}
               </div>
+              <button onClick={() => setNewChore({...newChore, habit_enabled: !newChore.habit_enabled})}
+                style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px', borderRadius:8, border:`2px solid ${newChore.habit_enabled ? '#1D9E75' : 'var(--cb-border2)'}`, background: newChore.habit_enabled ? '#1D9E7515' : 'var(--cb-surface)', cursor:'pointer', textAlign:'left' }}>
+                <span style={{ fontSize:20 }}>🌱</span>
+                <span style={{ flex:1 }}>
+                  <span style={{ display:'block', fontSize:16, fontWeight:700, color: newChore.habit_enabled ? '#1D9E75' : 'var(--cb-text-sub)' }}>Track as a habit</span>
+                  <span style={{ display:'block', fontSize:14, color:'var(--cb-text-muted)', marginTop:2 }}>Pays less as it becomes routine, with a bonus for mastering it</span>
+                </span>
+                <span style={{ width:44, height:26, borderRadius:13, background: newChore.habit_enabled ? '#1D9E75' : 'var(--cb-border2)', position:'relative', flexShrink:0 }}>
+                  <span style={{ position:'absolute', top:3, left: newChore.habit_enabled ? 21 : 3, width:20, height:20, borderRadius:'50%', background:'#fff', transition:'left 0.15s' }} />
+                </span>
+              </button>
+              {newChore.habit_enabled && (
+                <DecayPreview points={newChore.points} habitSettings={habitSettings} formatPoints={formatPoints} />
+              )}
               <button onClick={addChore} style={addBtnStyle}>Add Chore</button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'habits' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            {masteredChores.length > 0 && (
+              <div style={{ background:'var(--cb-surface2)', border:'1px solid #BA751566', borderRadius:12, padding:18 }}>
+                <div style={{ fontSize:17, color:'#BA7517', fontWeight:700, marginBottom:4 }}>🏆 Mastered habits</div>
+                <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginBottom:14 }}>
+                  These are part of life now and pay their floor value. Your call on what happens next.
+                </div>
+                {masteredChores.map(c => (
+                  <div key={c.id} style={{ background:'var(--cb-surface)', border:'1px solid var(--cb-border)', borderRadius:10, padding:'14px 16px', marginBottom:10 }}>
+                    <div style={{ fontSize:18, color:'var(--cb-text)', fontWeight:700 }}>{c.name}</div>
+                    <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginTop:2, marginBottom:12 }}>
+                      {c.kid_emoji} {c.kid_name} · mastered {c.mastered_at} · now pays {formatPoints(Math.max(1, Math.round(c.points * habitSettings.habit_floor_pct / 100)))}
+                    </div>
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                      <button onClick={async () => { await resolveMastery(c.id, 'keep'); onRefresh(); showToast(`Keeping "${c.name}"`) }}
+                        style={{ flex:1, minWidth:110, padding:'11px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer' }}>Keep it</button>
+                      <button onClick={async () => { await resolveMastery(c.id, 'retire'); onRefresh(); showToast(`Retired "${c.name}"`) }}
+                        style={{ flex:1, minWidth:110, padding:'11px 0', background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:8, color:'var(--cb-text-sub)', fontSize:15, fontWeight:700, cursor:'pointer' }}>Retire</button>
+                      <button onClick={async () => {
+                          if (!confirm(`Restart "${c.name}"?\n\nThis wipes its mastery and puts it back to full value (${formatPoints(c.points)}). Only do this if you want it to be a brand-new habit again.`)) return
+                          await resolveMastery(c.id, 'restart'); onRefresh(); showToast(`Restarted "${c.name}"`)
+                        }}
+                        style={{ flex:1, minWidth:110, padding:'11px 0', background:'transparent', border:'1px solid #BA7517', borderRadius:8, color:'#BA7517', fontSize:15, fontWeight:700, cursor:'pointer' }}>Start fresh</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {deadChores.length > 0 && (
+              <div style={{ background:'var(--cb-surface2)', border:'1px solid #E24B4A55', borderRadius:12, padding:18 }}>
+                <div style={{ fontSize:17, color:'#E24B4A', fontWeight:700, marginBottom:4 }}>💀 Dead habits</div>
+                <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginBottom:14 }}>
+                  Untouched for three weeks. Reviving brings a habit back at the value it had decayed to — dying never restores full price.
+                </div>
+                {deadChores.map(c => (
+                  <div key={c.id} style={{ background:'var(--cb-surface)', border:'1px solid var(--cb-border)', borderRadius:10, padding:'14px 16px', marginBottom:10 }}>
+                    <div style={{ fontSize:18, color:'var(--cb-text)', fontWeight:700 }}>{c.name}</div>
+                    <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginTop:2, marginBottom:12 }}>
+                      {c.kid_emoji} {c.kid_name} · died {c.died_at}
+                    </div>
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                      <button onClick={async () => { await reviveChore(c.id); onRefresh(); showToast(`Revived "${c.name}"`) }}
+                        style={{ flex:1, minWidth:110, padding:'11px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer' }}>Revive</button>
+                      <button onClick={async () => {
+                          if (!confirm(`Restart "${c.name}"?\n\nThis wipes its mastery and puts it back to full value (${formatPoints(c.points)}).`)) return
+                          await restartChore(c.id); onRefresh(); showToast(`Restarted "${c.name}"`)
+                        }}
+                        style={{ flex:1, minWidth:110, padding:'11px 0', background:'transparent', border:'1px solid #BA7517', borderRadius:8, color:'#BA7517', fontSize:15, fontWeight:700, cursor:'pointer' }}>Start fresh</button>
+                      <button onClick={async () => { await deleteChore(c.id); onRefresh(); showToast('Chore deleted') }}
+                        style={{ flex:1, minWidth:110, padding:'11px 0', background:'transparent', border:'1px solid #E24B4A', borderRadius:8, color:'#E24B4A', fontSize:15, fontWeight:700, cursor:'pointer' }}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:16 }}>
+              <div>
+                <div style={{ fontSize:18, color:'var(--cb-text-sub)', fontWeight:700 }}>How habits work</div>
+                <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginTop:6, lineHeight:1.5 }}>
+                  A tracked chore pays full value at first. As the kid racks up completions its value slides down to the floor
+                  over {habitSettings.habit_mastery_days} days — the habit is built, so the payout shrinks. Keeping a streak
+                  holds the value at the top of that band; missing halves the streak and costs about 30% until it's rebuilt.
+                  Untouched for 14 days a habit wilts, and at 21 days it dies.
+                </div>
+              </div>
+
+              <HabitSetting label="Habit forms after" suffix="days"
+                value={habitSettings.habit_mastery_days} min={7} max={365}
+                onCommit={v => saveHabitSettings({ habit_mastery_days: v })}
+                hint="How long a habit takes to fully form. New chores use this; existing habits keep the target they started with." />
+
+              <HabitSetting label="Floor value" suffix="% of full price"
+                value={habitSettings.habit_floor_pct} min={0} max={100}
+                onCommit={v => saveHabitSettings({ habit_floor_pct: v })}
+                hint="What a fully mastered chore still pays." />
+
+              <HabitSetting label="Graduation bonus" suffix="× the chore's value"
+                value={habitSettings.habit_graduation_multiplier} min={0} max={50} step={0.5}
+                onCommit={v => saveHabitSettings({ habit_graduation_multiplier: v })}
+                hint="One-time lump the moment a habit is mastered. Softens the drop and makes decay feel like leveling up." />
+
+              <HabitSetting label="Weekly consistency bonus" suffix={currencyMode === 'dollars' ? 'points (raw)' : 'points'}
+                value={habitSettings.habit_consistency_bonus} min={0} max={10000}
+                onCommit={v => saveHabitSettings({ habit_consistency_bonus: v })}
+                hint="Paid when every tracked habit ends the week healthy. This is what keeps mature habits worth doing — turn it up if income feels too thin." />
+
+              <HabitSetting label="Healthy means" suffix="% health or better"
+                value={habitSettings.habit_health_threshold} min={0} max={100}
+                onCommit={v => saveHabitSettings({ habit_health_threshold: v })}
+                hint="The bar every habit must clear to earn the weekly consistency bonus." />
             </div>
           </div>
         )}
@@ -565,6 +704,60 @@ function recurringLabel(recurring) {
 
 const inputStyle = { padding:'13px 14px', background:'var(--cb-input-bg)', border:'1px solid var(--cb-border2)', borderRadius:8, color:'var(--cb-text)', fontSize:17, width:'100%', boxSizing:'border-box' }
 const addBtnStyle = { padding:'14px 0', background:'#7F77DD', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }
+
+// Shows the parent exactly what they're signing up for before they enable decay.
+// Mirrors computeValue() on the server at three points on the curve, assuming the
+// kid keeps a streak going (the top of the band).
+function DecayPreview({ points, habitSettings, formatPoints }) {
+  const { habit_mastery_days: days, habit_floor_pct: floorPct, habit_graduation_multiplier: mult } = habitSettings
+  const at = mastery => Math.max(1, Math.round(points * (1 - (1 - floorPct / 100) * mastery)))
+  const steps = [
+    { label: 'Day 1', value: at(0) },
+    { label: `Day ${Math.round(days / 2)}`, value: at(0.5) },
+    { label: `Day ${days}`, value: at(1), mastered: true },
+  ]
+  return (
+    <div style={{ background:'var(--cb-surface)', border:'1px solid var(--cb-border)', borderRadius:8, padding:'12px 14px' }}>
+      <div style={{ fontSize:13, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>What it will pay</div>
+      <div style={{ display:'flex', alignItems:'flex-end', gap:8 }}>
+        {steps.map(s => (
+          <div key={s.label} style={{ flex:1, textAlign:'center' }}>
+            <div style={{ fontSize:17, fontWeight:700, color: s.mastered ? '#BA7517' : 'var(--cb-text)' }}>{formatPoints(s.value)}</div>
+            <div style={{ height:6, borderRadius:3, background: s.mastered ? '#BA7517' : '#7F77DD', opacity: 0.35 + 0.65 * (s.value / Math.max(1, points)), margin:'6px 0 4px' }} />
+            <div style={{ fontSize:13, color:'var(--cb-text-muted)' }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize:13, color:'var(--cb-text-muted)', marginTop:10, lineHeight:1.5 }}>
+        🏆 Mastering it pays a one-time {formatPoints(Math.max(1, Math.round(points * mult)))} bonus.
+        Break the streak and it pays ~30% less until it's rebuilt.
+      </div>
+    </div>
+  )
+}
+
+// Number field that only commits on blur, so a half-typed value never hits the API.
+function HabitSetting({ label, suffix, hint, value, min, max, step = 1, onCommit }) {
+  const [draft, setDraft] = useState(String(value))
+  useEffect(() => { setDraft(String(value)) }, [value])
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+        <span style={{ fontSize:16, color:'var(--cb-text)', fontWeight:600, flex:1, minWidth:150 }}>{label}</span>
+        <input type="number" min={min} max={max} step={step} value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={() => {
+            const n = parseFloat(draft)
+            if (!isFinite(n) || n < min || n > max) { setDraft(String(value)); return }
+            if (n !== value) onCommit(n)
+          }}
+          style={{ ...inputStyle, width:90, flexShrink:0, padding:'9px 10px', fontSize:16 }} />
+        <span style={{ fontSize:15, color:'var(--cb-text-muted)', flexShrink:0 }}>{suffix}</span>
+      </div>
+      {hint && <div style={{ fontSize:14, color:'var(--cb-text-faint)', marginTop:5, lineHeight:1.45 }}>{hint}</div>}
+    </div>
+  )
+}
 
 // Numeric input that shows and accepts dollars in dollars mode (with a $ prefix)
 // and whole points in points mode. Always emits the stored value in points, so

@@ -28,18 +28,53 @@ app.put('/api/pin', (req, res) => {
 })
 
 app.get('/api/settings', (_req, res) => {
-  const tz = db.prepare('SELECT value FROM settings WHERE key=?').get('timezone')
-  const dp = db.prepare('SELECT value FROM settings WHERE key=?').get('default_points')
-  const ts = db.prepare('SELECT value FROM settings WHERE key=?').get('text_size')
-  const cm = db.prepare('SELECT value FROM settings WHERE key=?').get('currency_mode')
-  const cr = db.prepare('SELECT value FROM settings WHERE key=?').get('currency_rate')
+  const get = (key) => db.prepare('SELECT value FROM settings WHERE key=?').get(key)
+  const tz = get('timezone')
+  const dp = get('default_points')
+  const ts = get('text_size')
+  const cm = get('currency_mode')
+  const cr = get('currency_rate')
+  const md = get('habit_mastery_days')
+  const fp = get('habit_floor_pct')
+  const gm = get('habit_graduation_multiplier')
+  const cb = get('habit_consistency_bonus')
+  const ht = get('habit_health_threshold')
   res.json({
     timezone: tz ? tz.value : 'America/New_York',
     default_points: dp ? parseInt(dp.value) : 10,
     text_size: ts ? ts.value : 'medium',
     currency_mode: cm ? cm.value : 'points',
     currency_rate: cr ? parseFloat(cr.value) : 0.05,
+    habit_mastery_days: md ? parseInt(md.value) : 60,
+    habit_floor_pct: fp ? parseInt(fp.value) : 40,
+    habit_graduation_multiplier: gm ? parseFloat(gm.value) : 5,
+    habit_consistency_bonus: cb ? parseInt(cb.value) : 25,
+    habit_health_threshold: ht ? parseInt(ht.value) : 80,
   })
+})
+
+const HABIT_SETTING_RANGES = {
+  habit_mastery_days: [7, 365],
+  habit_floor_pct: [0, 100],
+  habit_graduation_multiplier: [0, 50],
+  habit_consistency_bonus: [0, 10000],
+  habit_health_threshold: [0, 100],
+}
+
+app.put('/api/settings/habits', (req, res) => {
+  const updates = []
+  for (const [key, [min, max]] of Object.entries(HABIT_SETTING_RANGES)) {
+    if (!(key in req.body)) continue
+    const val = parseFloat(req.body[key])
+    if (!isFinite(val) || val < min || val > max) {
+      return res.status(400).json({ error: `Invalid ${key}` })
+    }
+    updates.push([key, String(val)])
+  }
+  for (const [key, value] of updates) {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value)
+  }
+  res.json({ ok: true })
 })
 
 app.put('/api/settings/default-points', (req, res) => {

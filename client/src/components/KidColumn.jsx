@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { completeChore, uncompleteChore, createShoutout, deleteShoutout } from '../api'
+import HabitMeter from './HabitMeter'
 
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 function recurringLabel(recurring) {
@@ -49,7 +50,7 @@ function burst(color) {
   draw()
 }
 
-export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, selectedDate, onRefresh, showToast, formatPoints }) {
+export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, selectedDate, locked, onRefresh, showToast, formatPoints }) {
   const [adding, setAdding] = useState(false)
   const [text, setText] = useState('')
 
@@ -57,18 +58,27 @@ export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, se
   const todo = chores.filter(c => !c.done)
 
   const handleComplete = async (chore) => {
+    if (locked) { showToast('Too late to check this off — that day is closed'); return }
     const res = await completeChore(chore.id, selectedDate)
     if (res.ok) {
       burst(kid.color)
-      showToast(`+${formatPoints(chore.points)} for ${kid.name}!`)
+      if (res.graduation) {
+        setTimeout(() => burst('#BA7517'), 250)
+        showToast(`🏆 ${kid.name} mastered ${res.graduation.chore_name}! +${formatPoints(res.graduation.bonus)} bonus!`)
+      } else {
+        showToast(`+${formatPoints(res.points_awarded)} for ${kid.name}!`)
+      }
       onRefresh()
+    } else if (res.error) {
+      showToast(res.error)
     }
   }
 
   const handleUncomplete = async (chore) => {
+    if (locked) { showToast('That day is closed — it can’t be changed now') ; return }
     const res = await uncompleteChore(chore.id, selectedDate)
     if (res.ok) {
-      showToast(`-${formatPoints(chore.points)} from ${kid.name}`)
+      showToast(`-${formatPoints(res.points_removed)} from ${kid.name}`)
       onRefresh()
     }
   }
@@ -128,6 +138,12 @@ export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, se
       )}
 
       <div style={{ padding:'10px 12px 16px', display:'flex', flexDirection:'column', gap:8 }}>
+        {locked && (
+          <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:'var(--cb-surface2)', border:'1px dashed var(--cb-border2)', borderRadius:10 }}>
+            <span style={{ fontSize:18, flexShrink:0 }}>🔒</span>
+            <span style={{ fontSize:14, color:'var(--cb-text-muted)' }}>This day is closed — you can look, but chores can only be checked off within 3 days.</span>
+          </div>
+        )}
         {redeemed && redeemed.map(r => (
           <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:'linear-gradient(135deg, #fff8e1, #fff3cd)', border:'1px solid #FFD70066', borderRadius:10 }}>
             <span style={{ fontSize:26, flexShrink:0 }}>🎉</span>
@@ -166,31 +182,41 @@ export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, se
         )}
 
         {todo.length > 0 && <div style={{ fontSize:12, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, padding:'6px 4px' }}>To do</div>}
-        {todo.map(chore => (
-          <div key={chore.id} onClick={() => handleComplete(chore)}
-            style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 16px', background:'var(--cb-surface2)', borderRadius:10, cursor:'pointer', border:'1px solid var(--cb-border)', userSelect:'none' }}>
-            <div style={{ width:36, height:36, borderRadius:'50%', border:`3px solid ${kid.color}66`, flexShrink:0 }} />
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:22, color:'var(--cb-text)', fontWeight:700 }}>{chore.name}</div>
-              <div style={{ fontSize:16, color:'var(--cb-text-muted)', marginTop:3 }}><span style={{ color: kid.color, fontWeight:700 }}>{formatPoints(chore.points)}</span> · {recurringLabel(chore.recurring)}</div>
-            </div>
-            {chore.streak >= 2 && (
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
-                <span style={{ fontSize:20 }}>🔥</span>
-                <span style={{ fontSize:13, fontWeight:700, color:'#D85A30' }}>{chore.streak}</span>
+        {todo.map(chore => {
+          const wilted = chore.habit_enabled && chore.lifecycle === 'wilted'
+          return (
+            <div key={chore.id} onClick={() => handleComplete(chore)}
+              style={{ display:'flex', alignItems:'flex-start', gap:14, padding:'18px 16px', background: wilted ? '#E24B4A0f' : 'var(--cb-surface2)', borderRadius:10, cursor: locked ? 'default' : 'pointer', border:`1px solid ${wilted ? '#E24B4A66' : 'var(--cb-border)'}`, userSelect:'none', opacity: locked ? 0.6 : 1 }}>
+              <div style={{ width:36, height:36, borderRadius:'50%', border:`3px solid ${kid.color}66`, flexShrink:0 }} />
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:22, color:'var(--cb-text)', fontWeight:700 }}>{chore.name}</div>
+                <div style={{ fontSize:16, color:'var(--cb-text-muted)', marginTop:3 }}><span style={{ color: kid.color, fontWeight:700 }}>{formatPoints(chore.points)}</span> · {recurringLabel(chore.recurring)}</div>
+                {wilted && (
+                  <div style={{ fontSize:14, color:'#E24B4A', fontWeight:700, marginTop:5 }}>
+                    🥀 Wilted — do it to bring it back! ({21 - chore.idle_days} {21 - chore.idle_days === 1 ? 'day' : 'days'} left)
+                  </div>
+                )}
+                <HabitMeter chore={chore} color={kid.color} />
               </div>
-            )}
-          </div>
-        ))}
+              {chore.streak >= 2 && (
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
+                  <span style={{ fontSize:20 }}>🔥</span>
+                  <span style={{ fontSize:13, fontWeight:700, color:'#D85A30' }}>{chore.streak}</span>
+                </div>
+              )}
+            </div>
+          )
+        })}
 
         {done.length > 0 && <div style={{ fontSize:12, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, padding:'6px 4px' }}>Done</div>}
         {done.map(chore => (
           <div key={chore.id} onClick={() => handleUncomplete(chore)}
-            style={{ display:'flex', alignItems:'center', gap:14, padding:'18px 16px', background:'var(--cb-surface2)', borderRadius:10, border:'1px solid var(--cb-border)', opacity:0.55, cursor:'pointer', userSelect:'none' }}>
+            style={{ display:'flex', alignItems:'flex-start', gap:14, padding:'18px 16px', background:'var(--cb-surface2)', borderRadius:10, border:'1px solid var(--cb-border)', opacity:0.55, cursor: locked ? 'default' : 'pointer', userSelect:'none' }}>
             <div style={{ width:36, height:36, borderRadius:'50%', background: kid.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, color:'#fff', flexShrink:0 }}>✓</div>
-            <div style={{ flex:1 }}>
+            <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:22, color:'var(--cb-text-dim)', fontWeight:700, textDecoration:'line-through' }}>{chore.name}</div>
               <div style={{ fontSize:16, color:'var(--cb-text-faint)', marginTop:3 }}>{formatPoints(chore.points)} · {recurringLabel(chore.recurring)}</div>
+              <HabitMeter chore={chore} color={kid.color} />
             </div>
             {chore.streak >= 2 && (
               <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>

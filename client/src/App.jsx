@@ -2,9 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Board from './components/Board'
 import RewardsView from './components/RewardsView'
 import AdminView from './components/AdminView'
-import { getKids, getChores, getAllChores, getRewards, getRequests, getSuggestions, verifyPin, getSettings, getPendingShoutouts } from './api'
+import { getKids, getChores, getAllChores, getRewards, getRequests, getSuggestions, verifyPin, getSettings, getPendingShoutouts, getMasteredChores, getDeadChores } from './api'
 
 const TEXT_ZOOM = { small: 0.85, medium: 1, large: 1.15, big: 1.3 }
+
+// How far back the board can be browsed, and how far back it stays editable.
+// Days between the two are visible but locked. EDIT_WINDOW_DAYS mirrors the server,
+// which is what actually enforces it.
+const VIEW_WINDOW_DAYS = 10
+const EDIT_WINDOW_DAYS = 3
 
 const localDateStr = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -78,6 +84,12 @@ export default function App() {
   const [textSize, setTextSize] = useState(() => localStorage.getItem('cb-text-size') || 'medium')
   const [pendingShoutouts, setPendingShoutouts] = useState([])
   const [suggestions, setSuggestions] = useState([])
+  const [masteredChores, setMasteredChores] = useState([])
+  const [deadChores, setDeadChores] = useState([])
+  const [habitSettings, setHabitSettings] = useState({
+    habit_mastery_days: 60, habit_floor_pct: 40, habit_graduation_multiplier: 5,
+    habit_consistency_bonus: 25, habit_health_threshold: 80,
+  })
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 600)
@@ -113,6 +125,13 @@ export default function App() {
       if (s.default_points) setDefaultPoints(s.default_points)
       if (s.currency_mode) setCurrencyMode(s.currency_mode)
       if (s.currency_rate) setCurrencyRate(s.currency_rate)
+      setHabitSettings(h => ({
+        habit_mastery_days: s.habit_mastery_days ?? h.habit_mastery_days,
+        habit_floor_pct: s.habit_floor_pct ?? h.habit_floor_pct,
+        habit_graduation_multiplier: s.habit_graduation_multiplier ?? h.habit_graduation_multiplier,
+        habit_consistency_bonus: s.habit_consistency_bonus ?? h.habit_consistency_bonus,
+        habit_health_threshold: s.habit_health_threshold ?? h.habit_health_threshold,
+      }))
     })
   }, [])
 
@@ -130,8 +149,9 @@ export default function App() {
   }
 
   const refresh = useCallback(async () => {
-    const [k, c, ac, r, req, ps, sg] = await Promise.all([getKids(), getChores(selectedDate), getAllChores(), getRewards(), getRequests(), getPendingShoutouts(), getSuggestions()])
+    const [k, c, ac, r, req, ps, sg, mc, dc] = await Promise.all([getKids(), getChores(selectedDate), getAllChores(), getRewards(), getRequests(), getPendingShoutouts(), getSuggestions(), getMasteredChores(), getDeadChores()])
     setKids(k); setChores(c); setAllChores(ac); setRewards(r); setRequests(req); setPendingShoutouts(ps); setSuggestions(sg)
+    setMasteredChores(mc); setDeadChores(dc)
   }, [selectedDate])
 
   useEffect(() => { refresh() }, [refresh])
@@ -174,6 +194,7 @@ export default function App() {
   }
 
   const theme = isDark ? DARK : LIGHT
+  const adminBadge = requests.length > 0 || pendingShoutouts.length > 0 || suggestions.length > 0 || masteredChores.length > 0
   const daysBack = Math.round((new Date(localDateStr()+'T12:00:00') - new Date(selectedDate+'T12:00:00')) / 86400000)
   const daysFwd  = Math.round((new Date(selectedDate+'T12:00:00') - new Date(localDateStr()+'T12:00:00')) / 86400000)
 
@@ -187,14 +208,14 @@ export default function App() {
               <button onClick={() => setMenuOpen(o => !o)}
                 style={{ ...navBtnSm, fontSize:20, lineHeight:1, position:'relative' }}>
                 &#9776;
-                {(requests.length > 0 || pendingShoutouts.length > 0 || suggestions.length > 0) && <span style={{ position:'absolute', top:3, right:3, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
+                {adminBadge && <span style={{ position:'absolute', top:3, right:3, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
               </button>
               {menuOpen && (
                 <div style={{ position:'absolute', top:'calc(100% + 6px)', right:0, background:'var(--cb-surface)', border:'1px solid var(--cb-border2)', borderRadius:10, overflow:'hidden', zIndex:50, minWidth:140, boxShadow:'0 4px 16px rgba(0,0,0,0.3)' }}>
                   {[
                     { label:'Board', action: () => { setView('board'); setMenuOpen(false) }, active: view==='board' },
                     { label:'Rewards', action: () => { setView('rewards'); setMenuOpen(false) }, active: view==='rewards' },
-                    { label:'Admin', action: () => { setMenuOpen(false); handleAdminClick() }, active: view==='admin', badge: requests.length > 0 || pendingShoutouts.length > 0 || suggestions.length > 0 },
+                    { label:'Admin', action: () => { setMenuOpen(false); handleAdminClick() }, active: view==='admin', badge: adminBadge },
                   ].map(item => (
                     <button key={item.label} onClick={item.action}
                       style={{ display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', padding:'14px 18px', background: item.active ? '#7F77DD22' : 'transparent', border:'none', borderBottom:'1px solid var(--cb-border)', color: item.active ? '#7F77DD' : 'var(--cb-text)', fontSize:16, fontWeight: item.active ? 700 : 400, cursor:'pointer', textAlign:'left' }}>
@@ -208,8 +229,8 @@ export default function App() {
           </div>
           {view === 'board' && (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'0 14px 10px' }}>
-              <button onClick={() => setSelectedDate(d => shiftDate(d, -1))} disabled={daysBack >= 7}
-                style={{ ...navBtnSm, opacity: daysBack >= 7 ? 0.3 : 1 }}>&#8592;</button>
+              <button onClick={() => setSelectedDate(d => shiftDate(d, -1))} disabled={daysBack >= VIEW_WINDOW_DAYS}
+                style={{ ...navBtnSm, opacity: daysBack >= VIEW_WINDOW_DAYS ? 0.3 : 1 }}>&#8592;</button>
               <button onClick={() => setSelectedDate(localDateStr())} style={{ ...navBtnSm, minWidth:90, fontWeight:600 }}>
                 {formatDate(selectedDate)}
                 {selectedDate === localDateStr() && <span style={{ color:'var(--cb-text-muted)', marginLeft:6 }}>{now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', timeZone: timezone })}</span>}
@@ -225,8 +246,8 @@ export default function App() {
 
           {view === 'board' && (
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <button onClick={() => setSelectedDate(d => shiftDate(d, -1))} disabled={daysBack >= 7}
-                style={{ ...navBtn, opacity: daysBack >= 7 ? 0.3 : 1 }}>&#8592;</button>
+              <button onClick={() => setSelectedDate(d => shiftDate(d, -1))} disabled={daysBack >= VIEW_WINDOW_DAYS}
+                style={{ ...navBtn, opacity: daysBack >= VIEW_WINDOW_DAYS ? 0.3 : 1 }}>&#8592;</button>
               <button onClick={() => setSelectedDate(localDateStr())} style={{ ...navBtn, minWidth:100, fontSize:16, fontWeight:600 }}>
                 {formatDate(selectedDate)}
                 {selectedDate === localDateStr() && <span style={{ color:'var(--cb-text-muted)', marginLeft:8 }}>{now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', timeZone: timezone })}</span>}
@@ -241,15 +262,15 @@ export default function App() {
             <button onClick={() => setView('rewards')} style={primaryBtnStyle(view==='rewards')}>Rewards</button>
             <button onClick={handleAdminClick} style={{ ...navBtn, fontSize:16, position:'relative' }}>
               Admin
-              {(requests.length > 0 || pendingShoutouts.length > 0 || suggestions.length > 0) && <span style={{ position:'absolute', top:4, right:4, width:9, height:9, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
+              {adminBadge && <span style={{ position:'absolute', top:4, right:4, width:9, height:9, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
             </button>
           </div>
         </div>
       )}
 
-      {view === 'board' && <Board kids={kids} chores={chores} requests={requests} selectedDate={selectedDate} onRefresh={refresh} showToast={showToast} formatPoints={formatPoints} />}
+      {view === 'board' && <Board kids={kids} chores={chores} requests={requests} selectedDate={selectedDate} locked={daysBack > EDIT_WINDOW_DAYS} onRefresh={refresh} showToast={showToast} formatPoints={formatPoints} />}
       {view === 'rewards' && <RewardsView kids={kids} rewards={rewards} suggestions={suggestions} onRefresh={refresh} showToast={showToast} formatPoints={formatPoints} currencyMode={currencyMode} currencyRate={currencyRate} />}
-      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} suggestions={suggestions} pendingShoutouts={pendingShoutouts} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} currencyMode={currencyMode} onCurrencyModeChange={setCurrencyMode} currencyRate={currencyRate} onCurrencyRateChange={setCurrencyRate} formatPoints={formatPoints} textSize={textSize} onTextSizeChange={size => { setTextSize(size); localStorage.setItem('cb-text-size', size) }} isDark={isDark} onToggleTheme={toggleTheme} onRefresh={refresh} showToast={showToast} setView={setView} />}
+      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} suggestions={suggestions} pendingShoutouts={pendingShoutouts} masteredChores={masteredChores} deadChores={deadChores} habitSettings={habitSettings} onHabitSettingsChange={setHabitSettings} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} currencyMode={currencyMode} onCurrencyModeChange={setCurrencyMode} currencyRate={currencyRate} onCurrencyRateChange={setCurrencyRate} formatPoints={formatPoints} textSize={textSize} onTextSizeChange={size => { setTextSize(size); localStorage.setItem('cb-text-size', size) }} isDark={isDark} onToggleTheme={toggleTheme} onRefresh={refresh} showToast={showToast} setView={setView} />}
 
       {showPin && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 }}>

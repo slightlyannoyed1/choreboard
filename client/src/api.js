@@ -14,6 +14,13 @@ export const deleteChore = (id) => fetch(`${BASE}/chores/${id}`, { method:'DELET
 export const completeChore = (id, date) => fetch(`${BASE}/chores/${id}/complete${date ? `?date=${date}` : ''}`, { method:'POST' }).then(r=>r.json())
 export const uncompleteChore = (id, date) => fetch(`${BASE}/chores/${id}/complete${date ? `?date=${date}` : ''}`, { method:'DELETE' }).then(r=>r.json())
 
+export const getMasteredChores = () => fetch(`${BASE}/chores/mastered`).then(r => r.json())
+export const getDeadChores = () => fetch(`${BASE}/chores/dead`).then(r => r.json())
+export const setChoreHabit = (id, data) => fetch(`${BASE}/chores/${id}/habit`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
+export const resolveMastery = (id, action) => fetch(`${BASE}/chores/${id}/mastery`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action }) }).then(r=>r.json())
+export const reviveChore = (id) => fetch(`${BASE}/chores/${id}/revive`, { method:'POST' }).then(r=>r.json())
+export const restartChore = (id) => fetch(`${BASE}/chores/${id}/restart`, { method:'POST' }).then(r=>r.json())
+
 export const getRewards = () => fetch(`${BASE}/rewards`).then(r => r.json())
 export const createReward = (data) => fetch(`${BASE}/rewards`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
 export const updateReward = (id, data) => fetch(`${BASE}/rewards/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
@@ -47,3 +54,4 @@ export const updateDefaultPoints = (points) => fetch(`${BASE}/settings/default-p
 export const updateTextSize = (size) => fetch(`${BASE}/settings/text-size`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ size }) }).then(r => r.json())
 export const updateCurrencyMode = (mode) => fetch(`${BASE}/settings/currency-mode`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ mode }) }).then(r => r.json())
 export const updateCurrencyRate = (rate) => fetch(`${BASE}/settings/currency-rate`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ rate }) }).then(r => r.json())
+export const updateHabitSettings = (data) => fetch(`${BASE}/settings/habits`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r => r.json())
