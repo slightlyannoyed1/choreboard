@@ -37,7 +37,7 @@ app.get('/api/settings', (_req, res) => {
   const md = get('habit_mastery_days')
   const fp = get('habit_floor_pct')
   const gm = get('habit_graduation_multiplier')
-  const cb = get('habit_consistency_bonus')
+  const cb = get('habit_consistency_pct')
   const ht = get('habit_health_threshold')
   res.json({
     timezone: tz ? tz.value : 'America/New_York',
@@ -48,7 +48,7 @@ app.get('/api/settings', (_req, res) => {
     habit_mastery_days: md ? parseInt(md.value) : 60,
     habit_floor_pct: fp ? parseInt(fp.value) : 40,
     habit_graduation_multiplier: gm ? parseFloat(gm.value) : 5,
-    habit_consistency_bonus: cb ? parseInt(cb.value) : 25,
+    habit_consistency_pct: cb ? parseInt(cb.value) : 20,
     habit_health_threshold: ht ? parseInt(ht.value) : 80,
   })
 })
@@ -57,7 +57,7 @@ const HABIT_SETTING_RANGES = {
   habit_mastery_days: [7, 365],
   habit_floor_pct: [0, 100],
   habit_graduation_multiplier: [0, 50],
-  habit_consistency_bonus: [0, 10000],
+  habit_consistency_pct: [0, 100],
   habit_health_threshold: [0, 100],
 }
 

@@ -20,7 +20,7 @@ function settings() {
     masteryDays: parseInt(s.habit_mastery_days) || 60,
     floorPct: parseInt(s.habit_floor_pct) || 40,
     graduationMultiplier: parseFloat(s.habit_graduation_multiplier) || 5,
-    consistencyBonus: parseInt(s.habit_consistency_bonus) || 25,
+    consistencyPct: parseInt(s.habit_consistency_pct) || 20,
     healthThreshold: parseInt(s.habit_health_threshold) || 80,
   }
 }
@@ -68,9 +68,13 @@ function sweepDeadHabits(date, byChore) {
 
 // Weekly consistency bonus. Evaluated lazily on the first request of a new week and
 // guarded by a unique index, so it pays exactly once even if the server was asleep.
+//
+// The bonus is a percentage of what the kid's tracked habits actually paid last week,
+// so it's expressed in the same currency as everything else -- no thinking in raw
+// points -- and it scales on its own as habit payouts decay.
 function awardConsistencyBonuses(date, byChore) {
-  const { healthThreshold, consistencyBonus } = settings()
-  if (consistencyBonus <= 0) return
+  const { healthThreshold, consistencyPct } = settings()
+  if (consistencyPct <= 0) return
 
   const weekStart = addDays(date, -dowForDate(date))   // Sunday of the current week
   const lastWeekStart = addDays(weekStart, -7)
@@ -91,17 +95,25 @@ function awardConsistencyBonuses(date, byChore) {
     const earned = chores.length > 0 && chores.every(c =>
       snapshot(c, byChore[c.id] || [], lastWeekEnd).health >= healthThreshold
     )
-    const points = earned ? consistencyBonus : 0
+
+    // Base: everything the kid earned from tracked habits during the week just ended.
+    const base = earned ? db.prepare(`
+      SELECT COALESCE(SUM(cp.points_awarded), 0) AS total
+      FROM completions cp JOIN chores c ON c.id = cp.chore_id
+      WHERE cp.kid_id = ? AND c.habit_enabled = 1
+        AND cp.completed_date >= ? AND cp.completed_date <= ?
+    `).get(kid.id, lastWeekStart, lastWeekEnd).total : 0
+    const points = earned ? Math.round(base * consistencyPct / 100) : 0
 
     // The points move only if this insert is the one that claimed the week, so the
     // bonus can never be paid twice.
     const claimed = db.prepare(
       'INSERT OR IGNORE INTO bonus_awards (kid_id, type, period_key, points) VALUES (?, ?, ?, ?)'
     ).run(kid.id, 'consistency', lastWeekStart, points)
-    if (claimed.changes === 0 || !earned) continue
+    if (claimed.changes === 0 || !earned || points <= 0) continue
 
     db.prepare('UPDATE kids SET points = points + ? WHERE id=?').run(points, kid.id)
-    logAudit(kid.id, 'consistency_bonus', `Consistency bonus: week of ${lastWeekStart}`, points)
+    logAudit(kid.id, 'consistency_bonus', `Consistency bonus (${consistencyPct}%): week of ${lastWeekStart}`, points)
   }
 }
 

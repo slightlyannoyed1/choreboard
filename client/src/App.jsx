@@ -88,7 +88,7 @@ export default function App() {
   const [deadChores, setDeadChores] = useState([])
   const [habitSettings, setHabitSettings] = useState({
     habit_mastery_days: 60, habit_floor_pct: 40, habit_graduation_multiplier: 5,
-    habit_consistency_bonus: 25, habit_health_threshold: 80,
+    habit_consistency_pct: 20, habit_health_threshold: 80,
   })
 
   useEffect(() => {
@@ -129,7 +129,7 @@ export default function App() {
         habit_mastery_days: s.habit_mastery_days ?? h.habit_mastery_days,
         habit_floor_pct: s.habit_floor_pct ?? h.habit_floor_pct,
         habit_graduation_multiplier: s.habit_graduation_multiplier ?? h.habit_graduation_multiplier,
-        habit_consistency_bonus: s.habit_consistency_bonus ?? h.habit_consistency_bonus,
+        habit_consistency_pct: s.habit_consistency_pct ?? h.habit_consistency_pct,
         habit_health_threshold: s.habit_health_threshold ?? h.habit_health_threshold,
       }))
     })

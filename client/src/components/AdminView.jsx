@@ -355,10 +355,10 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                 onCommit={v => saveHabitSettings({ habit_graduation_multiplier: v })}
                 hint="One-time lump the moment a habit is mastered. Softens the drop and makes decay feel like leveling up." />
 
-              <HabitSetting label="Weekly consistency bonus" suffix={currencyMode === 'dollars' ? 'points (raw)' : 'points'}
-                value={habitSettings.habit_consistency_bonus} min={0} max={10000}
-                onCommit={v => saveHabitSettings({ habit_consistency_bonus: v })}
-                hint="Paid when every tracked habit ends the week healthy. This is what keeps mature habits worth doing — turn it up if income feels too thin." />
+              <HabitSetting label="Weekly consistency bonus" suffix="% of the week's habit earnings"
+                value={habitSettings.habit_consistency_pct} min={0} max={100}
+                onCommit={v => saveHabitSettings({ habit_consistency_pct: v })}
+                hint="Paid when every tracked habit ends the week healthy, as a percentage of what those habits earned that week. This is what keeps mature habits worth doing — turn it up if income feels too thin." />
 
               <HabitSetting label="Healthy means" suffix="% health or better"
                 value={habitSettings.habit_health_threshold} min={0} max={100}

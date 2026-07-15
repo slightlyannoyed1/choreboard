@@ -130,7 +130,7 @@ const HABIT_DEFAULTS = {
   habit_mastery_days: '60',
   habit_floor_pct: '40',
   habit_graduation_multiplier: '5',
-  habit_consistency_bonus: '25',
+  habit_consistency_pct: '20',
   habit_health_threshold: '80',
 }
 for (const [key, value] of Object.entries(HABIT_DEFAULTS)) {
