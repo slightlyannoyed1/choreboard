@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
-import { getShoutouts, getRedeemed } from '../api'
+import { getShoutouts, getRedeemed, getDemerits, getCompletedBounties } from '../api'
 import KidColumn from './KidColumn'
+import BountyColumn from './BountyColumn'
 
-export default function Board({ kids, chores, requests, selectedDate, locked, onRefresh, showToast, formatPoints }) {
+export default function Board({ kids, chores, requests, bounties, selectedDate, locked, onRefresh, showToast, formatPoints }) {
   const [shoutouts, setShoutouts] = useState([])
   const [redeemed, setRedeemed] = useState([])
+  const [demerits, setDemerits] = useState([])
+  const [completedBounties, setCompletedBounties] = useState([])
   const [isMobile, setIsMobile] = useState(window.innerWidth < 600)
   const [activeIdx, setActiveIdx] = useState(0)
   const scrollRef = useRef(null)
@@ -12,6 +15,8 @@ export default function Board({ kids, chores, requests, selectedDate, locked, on
   const loadData = () => {
     getShoutouts(selectedDate).then(setShoutouts)
     getRedeemed(selectedDate).then(setRedeemed)
+    getDemerits(selectedDate).then(setDemerits)
+    getCompletedBounties(selectedDate).then(setCompletedBounties)
   }
 
   useEffect(() => { loadData() }, [selectedDate])
@@ -39,35 +44,53 @@ export default function Board({ kids, chores, requests, selectedDate, locked, on
     onRefresh()
   }
 
+  const hasBounties = (bounties && bounties.length > 0) || completedBounties.length > 0
+  const bountyColumn = (
+    <BountyColumn kids={kids} bounties={bounties || []} completedBounties={completedBounties} locked={locked} onRefresh={handleRefresh} showToast={showToast} formatPoints={formatPoints} />
+  )
+
   if (isMobile) {
+    const dotCount = kids.length + (hasBounties ? 1 : 0)
     return (
       <div>
         <div ref={scrollRef} className="board-scroll"
           style={{ overflowX: 'auto', display: 'flex', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {kids.map(kid => (
             <div key={kid.id} style={{ flex: '0 0 100%', scrollSnapAlign: 'start', padding: 12, boxSizing: 'border-box' }}>
-              <KidColumn kid={kid} chores={chores.filter(c => c.kid_id === kid.id)} awards={requests.filter(r => r.kid_id === kid.id)} redeemed={redeemed.filter(r => r.kid_id === kid.id)} shoutouts={shoutouts.filter(s => s.kid_id === kid.id)} selectedDate={selectedDate} locked={locked} onRefresh={handleRefresh} showToast={showToast} formatPoints={formatPoints} />
+              <KidColumn kid={kid} chores={chores.filter(c => c.kid_id === kid.id)} awards={requests.filter(r => r.kid_id === kid.id)} redeemed={redeemed.filter(r => r.kid_id === kid.id)} shoutouts={shoutouts.filter(s => s.kid_id === kid.id)} demerits={demerits.filter(d => d.kid_id === kid.id)} selectedDate={selectedDate} locked={locked} onRefresh={handleRefresh} showToast={showToast} formatPoints={formatPoints} />
             </div>
           ))}
+          {hasBounties && (
+            <div style={{ flex: '0 0 100%', scrollSnapAlign: 'start', padding: 12, boxSizing: 'border-box' }}>
+              {bountyColumn}
+            </div>
+          )}
         </div>
-        {kids.length > 1 && (
+        {dotCount > 1 && (
           <div style={{ display: 'flex', justifyContent: 'center', gap: 8, padding: '6px 0 14px' }}>
             {kids.map((kid, idx) => (
               <div key={kid.id}
                 onClick={() => scrollRef.current?.scrollTo({ left: idx * scrollRef.current.clientWidth, behavior: 'smooth' })}
                 style={{ width: activeIdx === idx ? 20 : 8, height: 8, borderRadius: 4, background: activeIdx === idx ? kid.color : 'var(--cb-border2)', cursor: 'pointer', transition: 'width 0.2s, background 0.2s' }} />
             ))}
+            {hasBounties && (
+              <div key="bounty"
+                onClick={() => scrollRef.current?.scrollTo({ left: kids.length * scrollRef.current.clientWidth, behavior: 'smooth' })}
+                style={{ width: activeIdx === kids.length ? 20 : 8, height: 8, borderRadius: 4, background: activeIdx === kids.length ? '#BA7517' : 'var(--cb-border2)', cursor: 'pointer', transition: 'width 0.2s, background 0.2s' }} />
+            )}
           </div>
         )}
       </div>
     )
   }
 
+  const columnCount = kids.length + (hasBounties ? 1 : 0)
   return (
-    <div style={{ display:'grid', gridTemplateColumns:`repeat(${kids.length}, 1fr)`, gap:12, padding:16 }}>
+    <div style={{ display:'grid', gridTemplateColumns:`repeat(${columnCount}, 1fr)`, gap:12, padding:16 }}>
       {kids.map(kid => (
-        <KidColumn key={kid.id} kid={kid} chores={chores.filter(c => c.kid_id === kid.id)} awards={requests.filter(r => r.kid_id === kid.id)} redeemed={redeemed.filter(r => r.kid_id === kid.id)} shoutouts={shoutouts.filter(s => s.kid_id === kid.id)} selectedDate={selectedDate} locked={locked} onRefresh={handleRefresh} showToast={showToast} formatPoints={formatPoints} />
+        <KidColumn key={kid.id} kid={kid} chores={chores.filter(c => c.kid_id === kid.id)} awards={requests.filter(r => r.kid_id === kid.id)} redeemed={redeemed.filter(r => r.kid_id === kid.id)} shoutouts={shoutouts.filter(s => s.kid_id === kid.id)} demerits={demerits.filter(d => d.kid_id === kid.id)} selectedDate={selectedDate} locked={locked} onRefresh={handleRefresh} showToast={showToast} formatPoints={formatPoints} />
       ))}
+      {hasBounties && bountyColumn}
     </div>
   )
 }

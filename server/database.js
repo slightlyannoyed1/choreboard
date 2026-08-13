@@ -66,11 +66,37 @@ db.exec(`
     FOREIGN KEY (reward_id) REFERENCES rewards(id)
   );
 
+  CREATE TABLE IF NOT EXISTS bounties (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    points INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    claimed_by_kid_id INTEGER,
+    claimed_at DATETIME,
+    completed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (claimed_by_kid_id) REFERENCES kids(id)
+  );
+
   CREATE TABLE IF NOT EXISTS kid_shoutouts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kid_id INTEGER NOT NULL,
     description TEXT NOT NULL,
     shoutout_date TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (kid_id) REFERENCES kids(id)
+  );
+`)
+
+// Demerits: an admin-only gentle deduction that shows as a friendly badge on the
+// board for the day it was given, mirroring how shoutouts surface.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS demerits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kid_id INTEGER NOT NULL,
+    points INTEGER NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    demerit_date TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (kid_id) REFERENCES kids(id)
   );

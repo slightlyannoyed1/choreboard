@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { completeChore, uncompleteChore, createShoutout, deleteShoutout } from '../api'
 import HabitMeter from './HabitMeter'
 
+// Gentle, non-scolding face for demerits — a nudge, not a punishment.
+export const DEMERIT_EMOJI = '🫤'
+
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 function recurringLabel(recurring) {
   if (recurring === 'daily') return 'Daily'
@@ -50,7 +53,7 @@ function burst(color) {
   draw()
 }
 
-export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, selectedDate, locked, onRefresh, showToast, formatPoints }) {
+export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, demerits, selectedDate, locked, onRefresh, showToast, formatPoints }) {
   const [adding, setAdding] = useState(false)
   const [text, setText] = useState('')
 
@@ -176,6 +179,19 @@ export default function KidColumn({ kid, chores, awards, redeemed, shoutouts, se
                   ? <span style={{ color:'var(--cb-text-faint)', fontSize:13, flexShrink:0 }}>✓</span>
                   : <button onClick={() => handleDeleteShoutout(s.id)} title="Remove" style={{ background:'none', border:'none', color:'var(--cb-text-faint)', fontSize:16, cursor:'pointer', padding:'0 4px', lineHeight:1, flexShrink:0 }}>×</button>
                 }
+              </div>
+            ))}
+          </>
+        )}
+
+        {demerits && demerits.length > 0 && (
+          <>
+            <div style={{ fontSize:12, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, padding:'6px 4px' }}>Demerits</div>
+            {demerits.map(d => (
+              <div key={d.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:'#E24B4A11', border:'1px solid #E24B4A33', borderRadius:10 }}>
+                <span style={{ fontSize:22, flexShrink:0 }}>{DEMERIT_EMOJI}</span>
+                <div style={{ flex:1, fontSize:16, color:'var(--cb-text)', fontWeight:500 }}>{d.reason || 'Demerit'}</div>
+                <span style={{ background:'#E24B4A22', color:'#E24B4A', padding:'3px 10px', borderRadius:20, fontSize:14, fontWeight:700, flexShrink:0 }}>-{formatPoints(d.points)}</span>
               </div>
             ))}
           </>

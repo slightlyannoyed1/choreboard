@@ -13,6 +13,7 @@ app.use(express.static(path.join(__dirname, 'public')))
 app.use('/api/kids', require('./routes/kids'))
 app.use('/api/chores', require('./routes/chores'))
 app.use('/api/rewards', require('./routes/rewards'))
+app.use('/api/bounties', require('./routes/bounties'))
 
 app.get('/api/pin/verify', (req, res) => {
   const { pin } = req.query
@@ -168,6 +169,43 @@ app.post('/api/shoutouts/:id/acknowledge', (req, res) => {
 
 app.delete('/api/shoutouts/:id', (req, res) => {
   db.prepare('DELETE FROM kid_shoutouts WHERE id=?').run(req.params.id)
+  res.json({ ok: true })
+})
+
+// Demerits: an admin-only deduction of a normal points/dollar amount. The reason
+// is optional. Shows up as a gentle badge on the board for the day it lands.
+app.get('/api/demerits', (req, res) => {
+  const date = req.query.date || new Date().toISOString().slice(0, 10)
+  const rows = db.prepare('SELECT * FROM demerits WHERE demerit_date=? ORDER BY created_at ASC').all(date)
+  res.json(rows)
+})
+
+app.post('/api/demerits', (req, res) => {
+  const { kid_id, points, reason, date } = req.body
+  const val = parseInt(points)
+  if (!kid_id || !val || val < 1) return res.status(400).json({ error: 'Invalid demerit' })
+  const kid = db.prepare('SELECT * FROM kids WHERE id=?').get(kid_id)
+  if (!kid) return res.status(404).json({ error: 'Kid not found' })
+  const demerit_date = date || new Date().toISOString().slice(0, 10)
+  const reasonText = (reason || '').trim()
+  const result = db.prepare('INSERT INTO demerits (kid_id, points, reason, demerit_date) VALUES (?, ?, ?, ?)')
+    .run(kid_id, val, reasonText, demerit_date)
+  db.prepare('UPDATE kids SET points = points - ? WHERE id=?').run(val, kid_id)
+  db.prepare('INSERT INTO audit_log (kid_id, kid_name, type, description, points) VALUES (?, ?, ?, ?, ?)')
+    .run(kid.id, kid.name, 'demerit', reasonText ? `Demerit: ${reasonText}` : 'Demerit', -val)
+  res.json({ ok: true, id: result.lastInsertRowid })
+})
+
+app.delete('/api/demerits/:id', (req, res) => {
+  const demerit = db.prepare('SELECT * FROM demerits WHERE id=?').get(req.params.id)
+  if (!demerit) return res.status(404).json({ error: 'Not found' })
+  const kid = db.prepare('SELECT * FROM kids WHERE id=?').get(demerit.kid_id)
+  db.prepare('DELETE FROM demerits WHERE id=?').run(req.params.id)
+  if (kid) {
+    db.prepare('UPDATE kids SET points = points + ? WHERE id=?').run(demerit.points, demerit.kid_id)
+    db.prepare('INSERT INTO audit_log (kid_id, kid_name, type, description, points) VALUES (?, ?, ?, ?, ?)')
+      .run(kid.id, kid.name, 'points_added', 'Demerit removed', demerit.points)
+  }
   res.json({ ok: true })
 })
 

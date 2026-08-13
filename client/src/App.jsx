@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Board from './components/Board'
 import RewardsView from './components/RewardsView'
 import AdminView from './components/AdminView'
-import { getKids, getChores, getAllChores, getRewards, getRequests, getSuggestions, verifyPin, getSettings, getPendingShoutouts, getMasteredChores, getDeadChores } from './api'
+import { getKids, getChores, getAllChores, getRewards, getRequests, getSuggestions, verifyPin, getSettings, getPendingShoutouts, getMasteredChores, getDeadChores, getBounties, getPendingBounties } from './api'
 
 const TEXT_ZOOM = { small: 0.85, medium: 1, large: 1.15, big: 1.3 }
 
@@ -86,6 +86,8 @@ export default function App() {
   const [suggestions, setSuggestions] = useState([])
   const [masteredChores, setMasteredChores] = useState([])
   const [deadChores, setDeadChores] = useState([])
+  const [bounties, setBounties] = useState([])
+  const [pendingBounties, setPendingBounties] = useState([])
   const [habitSettings, setHabitSettings] = useState({
     habit_mastery_days: 60, habit_floor_pct: 40, habit_graduation_multiplier: 5,
     habit_consistency_pct: 20, habit_health_threshold: 80,
@@ -149,9 +151,9 @@ export default function App() {
   }
 
   const refresh = useCallback(async () => {
-    const [k, c, ac, r, req, ps, sg, mc, dc] = await Promise.all([getKids(), getChores(selectedDate), getAllChores(), getRewards(), getRequests(), getPendingShoutouts(), getSuggestions(), getMasteredChores(), getDeadChores()])
+    const [k, c, ac, r, req, ps, sg, mc, dc, b, pb] = await Promise.all([getKids(), getChores(selectedDate), getAllChores(), getRewards(), getRequests(), getPendingShoutouts(), getSuggestions(), getMasteredChores(), getDeadChores(), getBounties(), getPendingBounties()])
     setKids(k); setChores(c); setAllChores(ac); setRewards(r); setRequests(req); setPendingShoutouts(ps); setSuggestions(sg)
-    setMasteredChores(mc); setDeadChores(dc)
+    setMasteredChores(mc); setDeadChores(dc); setBounties(b); setPendingBounties(pb)
   }, [selectedDate])
 
   useEffect(() => { refresh() }, [refresh])
@@ -194,7 +196,7 @@ export default function App() {
   }
 
   const theme = isDark ? DARK : LIGHT
-  const adminBadge = requests.length > 0 || pendingShoutouts.length > 0 || suggestions.length > 0 || masteredChores.length > 0
+  const adminBadge = requests.length > 0 || pendingShoutouts.length > 0 || suggestions.length > 0 || masteredChores.length > 0 || pendingBounties.length > 0
   const daysBack = Math.round((new Date(localDateStr()+'T12:00:00') - new Date(selectedDate+'T12:00:00')) / 86400000)
   const daysFwd  = Math.round((new Date(selectedDate+'T12:00:00') - new Date(localDateStr()+'T12:00:00')) / 86400000)
 
@@ -268,9 +270,9 @@ export default function App() {
         </div>
       )}
 
-      {view === 'board' && <Board kids={kids} chores={chores} requests={requests} selectedDate={selectedDate} locked={daysBack > EDIT_WINDOW_DAYS} onRefresh={refresh} showToast={showToast} formatPoints={formatPoints} />}
+      {view === 'board' && <Board kids={kids} chores={chores} requests={requests} bounties={bounties} selectedDate={selectedDate} locked={daysBack > EDIT_WINDOW_DAYS} onRefresh={refresh} showToast={showToast} formatPoints={formatPoints} />}
       {view === 'rewards' && <RewardsView kids={kids} rewards={rewards} suggestions={suggestions} onRefresh={refresh} showToast={showToast} formatPoints={formatPoints} currencyMode={currencyMode} currencyRate={currencyRate} />}
-      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} suggestions={suggestions} pendingShoutouts={pendingShoutouts} masteredChores={masteredChores} deadChores={deadChores} habitSettings={habitSettings} onHabitSettingsChange={setHabitSettings} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} currencyMode={currencyMode} onCurrencyModeChange={setCurrencyMode} currencyRate={currencyRate} onCurrencyRateChange={setCurrencyRate} formatPoints={formatPoints} textSize={textSize} onTextSizeChange={size => { setTextSize(size); localStorage.setItem('cb-text-size', size) }} isDark={isDark} onToggleTheme={toggleTheme} onRefresh={refresh} showToast={showToast} setView={setView} />}
+      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} suggestions={suggestions} pendingShoutouts={pendingShoutouts} masteredChores={masteredChores} deadChores={deadChores} bounties={bounties} pendingBounties={pendingBounties} habitSettings={habitSettings} onHabitSettingsChange={setHabitSettings} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} currencyMode={currencyMode} onCurrencyModeChange={setCurrencyMode} currencyRate={currencyRate} onCurrencyRateChange={setCurrencyRate} formatPoints={formatPoints} textSize={textSize} onTextSizeChange={size => { setTextSize(size); localStorage.setItem('cb-text-size', size) }} isDark={isDark} onToggleTheme={toggleTheme} onRefresh={refresh} showToast={showToast} setView={setView} />}
 
       {showPin && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 }}>

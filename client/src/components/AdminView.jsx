@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, approveSuggestion, rejectSuggestion, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateCurrencyMode, updateCurrencyRate, adjustKidPoints, awardShoutout, acknowledgeShoutout, deleteShoutout, setChoreHabit, resolveMastery, reviveChore, restartChore, updateHabitSettings } from '../api'
+import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, approveSuggestion, rejectSuggestion, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateCurrencyMode, updateCurrencyRate, adjustKidPoints, awardShoutout, acknowledgeShoutout, deleteShoutout, createDemerit, setChoreHabit, resolveMastery, reviveChore, restartChore, updateHabitSettings, createBounty, updateBounty, deleteBounty, verifyBounty } from '../api'
 import HabitMeter from './HabitMeter'
+import { DEMERIT_EMOJI } from './KidColumn'
 
 const tzLabel = (tz) => {
   const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
@@ -20,11 +21,20 @@ const COLORS = ['#7F77DD','#1D9E75','#D85A30','#D4537E','#378ADD','#639922','#BA
 
 const TEXT_SIZES = ['small', 'medium', 'large', 'big']
 
-export default function AdminView({ kids, allChores, rewards, requests, suggestions, pendingShoutouts, masteredChores, deadChores, habitSettings, onHabitSettingsChange, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, currencyMode, onCurrencyModeChange, currencyRate, onCurrencyRateChange, formatPoints, textSize, onTextSizeChange, isDark, onToggleTheme, onRefresh, showToast, setView }) {
+// The board keys everything off the browser-local date; a demerit given "now" must
+// be stamped the same way, or it lands on the server's UTC date and never shows.
+const localDateStr = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
+export default function AdminView({ kids, allChores, rewards, requests, suggestions, pendingShoutouts, masteredChores, deadChores, bounties, pendingBounties, habitSettings, onHabitSettingsChange, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, currencyMode, onCurrencyModeChange, currencyRate, onCurrencyRateChange, formatPoints, textSize, onTextSizeChange, isDark, onToggleTheme, onRefresh, showToast, setView }) {
   const [tab, setTab] = useState('pending')
   const [newKid, setNewKid] = useState({ name:'', emoji:'🦊', color:'#7F77DD' })
   const [newChore, setNewChore] = useState({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6', habit_enabled:false })
   const [newReward, setNewReward] = useState({ name:'', points:50 })
+  const [newBounty, setNewBounty] = useState({ name:'', points:defaultPoints })
+  const [editingBounty, setEditingBounty] = useState(null)
   const [editingKid, setEditingKid] = useState(null)
   const [addingKid, setAddingKid] = useState(false)
   const [editingReward, setEditingReward] = useState(null)
@@ -85,6 +95,20 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
     setNewReward({ name:'', points:50 })
   }
 
+  const addBounty = async () => {
+    if (!newBounty.name.trim()) return
+    const res = await createBounty({ name: newBounty.name.trim(), points: newBounty.points })
+    if (res.ok) { onRefresh(); showToast('Bounty posted!'); setNewBounty({ name:'', points:defaultPoints }) }
+    else showToast(res.error || 'Could not post bounty')
+  }
+
+  const saveBounty = async () => {
+    if (!editingBounty.name.trim()) return
+    const res = await updateBounty(editingBounty.id, { name: editingBounty.name.trim(), points: editingBounty.points })
+    if (res.ok) { onRefresh(); showToast('Saved!'); setEditingBounty(null) }
+    else showToast(res.error || 'Could not save bounty')
+  }
+
   const handleSavePin = async () => {
     if (!/^\d{4}$/.test(newPin)) { showToast('PIN must be 4 digits'); return }
     const res = await updatePin(newPin)
@@ -104,7 +128,23 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
     if (res.ok) { onRefresh(); showToast(`${delta > 0 ? '+' : ''}${formatPoints(delta)} applied!`); setPointsReason('') }
   }
 
-  const tabs = ['kids', 'chores', 'habits', 'rewards', 'points', 'settings', 'log']
+  const [demeritKidId, setDemeritKidId] = useState('')
+  const [demeritAmount, setDemeritAmount] = useState(defaultPoints)
+  const [demeritReason, setDemeritReason] = useState('')
+
+  const giveDemerit = async () => {
+    if (!demeritKidId) return
+    const points = parseInt(demeritAmount) || 0
+    if (points < 1) return
+    const res = await createDemerit({ kid_id: demeritKidId, points, reason: demeritReason || undefined, date: localDateStr() })
+    if (res.ok) {
+      onRefresh()
+      showToast(`${DEMERIT_EMOJI} -${formatPoints(points)} demerit given`)
+      setDemeritReason('')
+    }
+  }
+
+  const tabs = ['kids', 'chores', 'habits', 'rewards', 'bounties', 'points', 'settings', 'log']
 
   return (
     <div>
@@ -116,6 +156,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
             {t==='rewards'&&(requests.length>0||suggestions.length>0)&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
             {t==='points'&&pendingShoutouts.length>0&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
             {t==='habits'&&masteredChores.length>0&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
+            {t==='bounties'&&pendingBounties.length>0&&<span style={{ position:'absolute', top:10, right:6, width:8, height:8, background:'#E24B4A', borderRadius:'50%', display:'block' }} />}
           </div>
         ))}
         <div style={{ marginLeft:'auto', padding:'10px 0', flexShrink:0 }}>
@@ -456,6 +497,30 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                   style={{ flex:1, padding:'14px 0', background:'#E24B4A', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>- Remove {currencyMode === 'dollars' ? 'Money' : 'Points'}</button>
               </div>
             </div>
+
+            {/* Demerit — a named deduction that shows a friendly badge on the board */}
+            <div style={{ background:'var(--cb-surface2)', border:'1px solid #E24B4A44', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:14 }}>
+              <div style={{ fontSize:17, color:'#E24B4A', fontWeight:700 }}>{DEMERIT_EMOJI} Give a demerit</div>
+              <div style={{ fontSize:14, color:'var(--cb-text-muted)', marginTop:-6 }}>Subtracts the amount and shows a gentle badge on the board today.</div>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {kids.map(k => {
+                  const active = demeritKidId === String(k.id)
+                  return (
+                    <button key={k.id} type="button" onClick={() => setDemeritKidId(String(k.id))}
+                      style={{ padding:'10px 14px', borderRadius:8, border:'none', background: active?'#E24B4A':'var(--cb-border)', color: active?'#ffffff':'var(--cb-text-faint)', fontSize:15, fontWeight:700, cursor:'pointer', opacity: active?1:0.6 }}>
+                      {k.emoji} {k.name}
+                    </button>
+                  )
+                })}
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <AmountInput points={demeritAmount} onPoints={setDemeritAmount} currencyMode={currencyMode} currencyRate={currencyRate} />
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>{currencyMode === 'dollars' ? 'Amount to subtract' : 'Points to subtract'}</span>
+              </div>
+              <input value={demeritReason} onChange={e=>setDemeritReason(e.target.value)} placeholder="Reason (optional)" style={inputStyle} />
+              <button onClick={giveDemerit}
+                style={{ padding:'14px 0', background:'#E24B4A', border:'none', borderRadius:8, color:'#fff', fontSize:17, cursor:'pointer', fontWeight:700 }}>{DEMERIT_EMOJI} Give Demerit</button>
+            </div>
           </div>
         )}
 
@@ -560,6 +625,94 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
           </div>
         )}
 
+        {tab === 'bounties' && (
+          <div>
+            <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginBottom:16, lineHeight:1.5 }}>
+              Post a one-off task any kid can claim. When someone claims it, verify the work here — approving pays them the reward, rejecting puts it back on the board.
+            </div>
+
+            {pendingBounties.length > 0 && (
+              <div style={{ marginBottom:18 }}>
+                <div style={{ fontSize:15, color:'var(--cb-text-faint)', textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Waiting for verification</div>
+                {pendingBounties.map(b => (
+                  <div key={b.id} style={{ background:'var(--cb-surface2)', border:'1px solid #BA751566', borderRadius:12, padding:'16px 18px', marginBottom:10 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+                      <span style={{ fontSize:26 }}>🏆</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:18, color:'var(--cb-text)', fontWeight:700 }}>{b.name}</div>
+                        <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginTop:2 }}>{b.kid_emoji} {b.kid_name} says they did it · {formatPoints(b.points)}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize:14, color:'var(--cb-text-sub)', fontWeight:600, marginBottom:8 }}>Did they really do it?</div>
+                    <div style={{ display:'flex', gap:10 }}>
+                      <button onClick={async () => { const res = await verifyBounty(b.id, true); if (res.ok) { onRefresh(); showToast(`✓ ${b.kid_name} earned ${formatPoints(b.points)}!`) } }}
+                        style={{ flex:1, padding:'12px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:16, cursor:'pointer', fontWeight:700 }}>
+                        ✓ Yes, pay {formatPoints(b.points)}
+                      </button>
+                      <button onClick={async () => { const res = await verifyBounty(b.id, false); if (res.ok) { onRefresh(); showToast('Sent back to the board') } }}
+                        style={{ flex:1, padding:'12px 0', background:'var(--cb-surface)', border:'1px solid #E24B4A', borderRadius:8, color:'#E24B4A', fontSize:16, cursor:'pointer', fontWeight:700 }}>
+                        ✕ No, put it back
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {bounties.filter(b => b.status === 'open').map(b => (
+              <div key={b.id}>
+                {editingBounty?.id === b.id ? (
+                  <div style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, marginBottom:10, display:'flex', flexDirection:'column', gap:12 }}>
+                    <input value={editingBounty.name} onChange={e=>setEditingBounty({...editingBounty,name:e.target.value})} placeholder="Bounty task" style={inputStyle} />
+                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                      <AmountInput points={editingBounty.points} onPoints={v=>setEditingBounty({...editingBounty,points:v})} currencyMode={currencyMode} currencyRate={currencyRate} />
+                      <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>{currencyMode === 'dollars' ? 'Reward' : 'Reward points'}</span>
+                    </div>
+                    <div style={{ display:'flex', gap:10 }}>
+                      <button onClick={saveBounty} style={{ ...addBtnStyle, flex:1 }}>Save</button>
+                      <button onClick={()=>setEditingBounty(null)} style={{ flex:1, padding:'12px 0', background:'var(--cb-border)', border:'none', borderRadius:8, color:'var(--cb-text-sub)', fontSize:17, cursor:'pointer' }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:12, padding:'16px 20px', marginBottom:10, gap:10 }}>
+                    <span style={{ fontSize:22, flexShrink:0 }}>💰</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:20, color:'var(--cb-text)', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.name}</div>
+                      <div style={{ fontSize:15, color:'#BA7517', fontWeight:700, marginTop:2 }}>{formatPoints(b.points)} · up for grabs</div>
+                    </div>
+                    <button onClick={()=>setEditingBounty({id:b.id,name:b.name,points:b.points})}
+                      style={{ background:'none', border:'none', color:'#7F77DD', cursor:'pointer', fontSize:22, padding:'0 8px' }}>✎</button>
+                    <button onClick={async()=>{await deleteBounty(b.id);onRefresh()}}
+                      style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22, padding:'0 8px' }}>&#x2715;</button>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {bounties.filter(b => b.status === 'claimed').map(b => (
+              <div key={b.id} style={{ display:'flex', alignItems:'center', background:'var(--cb-surface2)', border:'1px solid #BA751544', borderRadius:12, padding:'16px 20px', marginBottom:10, gap:10, opacity:0.85 }}>
+                <span style={{ fontSize:22, flexShrink:0 }}>⏳</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:20, color:'var(--cb-text)', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.name}</div>
+                  <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginTop:2 }}>{b.kid_emoji} {b.kid_name} claimed · awaiting your review above</div>
+                </div>
+                <button onClick={async()=>{await deleteBounty(b.id);onRefresh()}}
+                  style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22, padding:'0 8px' }}>&#x2715;</button>
+              </div>
+            ))}
+
+            <div style={{ marginTop:18, background:'var(--cb-surface2)', border:'1px solid var(--cb-border2)', borderRadius:12, padding:18, display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:600 }}>Post a bounty</div>
+              <input value={newBounty.name} onChange={e=>setNewBounty({...newBounty,name:e.target.value})} placeholder="Task (e.g. Sweep the kitchen floor)" style={inputStyle} />
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <AmountInput points={newBounty.points} onPoints={v=>setNewBounty({...newBounty,points:v})} currencyMode={currencyMode} currencyRate={currencyRate} />
+                <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>{currencyMode === 'dollars' ? 'Reward' : 'Reward points'}</span>
+              </div>
+              <button onClick={addBounty} style={addBtnStyle}>Post Bounty</button>
+            </div>
+          </div>
+        )}
+
         {tab === 'log' && (
           <div>
             <div style={{ fontSize:15, color:'var(--cb-text-faint)', marginBottom:14 }}>Past 30 days · {auditLog.length} entries</div>
@@ -574,8 +727,8 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
               const isYesterday = entryStr === yesterdayStr
               const time = d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', timeZone: timezone })
               const dateLabel = isToday ? `Today ${time}` : isYesterday ? `Yesterday ${time}` : d.toLocaleDateString('en-US', { month:'short', day:'numeric', timeZone: timezone }) + ' ' + time
-              const icon = entry.type === 'chore_complete' ? '✓' : entry.type === 'chore_uncomplete' ? '↩' : entry.type === 'prize_given' ? '🎁' : entry.type === 'points_added' ? '⬆' : entry.type === 'points_removed' ? '⬇' : '🏆'
-              const iconColor = entry.type === 'chore_complete' ? '#1D9E75' : entry.type === 'chore_uncomplete' ? 'var(--cb-text-muted)' : entry.type === 'points_added' ? '#1D9E75' : entry.type === 'points_removed' ? '#E24B4A' : '#7F77DD'
+              const icon = entry.type === 'chore_complete' ? '✓' : entry.type === 'chore_uncomplete' ? '↩' : entry.type === 'prize_given' ? '🎁' : entry.type === 'points_added' ? '⬆' : entry.type === 'points_removed' ? '⬇' : entry.type === 'demerit' ? DEMERIT_EMOJI : '🏆'
+              const iconColor = entry.type === 'chore_complete' ? '#1D9E75' : entry.type === 'chore_uncomplete' ? 'var(--cb-text-muted)' : entry.type === 'points_added' ? '#1D9E75' : entry.type === 'points_removed' ? '#E24B4A' : entry.type === 'demerit' ? '#E24B4A' : '#7F77DD'
               return (
                 <div key={entry.id} style={{ padding:'12px 14px', background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:10, marginBottom:7 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10 }}>

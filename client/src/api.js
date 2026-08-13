@@ -36,12 +36,26 @@ export const createRequest = (data) => fetch(`${BASE}/rewards/requests`, { metho
 export const acknowledgeRequest = (id) => fetch(`${BASE}/rewards/requests/${id}/acknowledge`, { method:'POST' }).then(r=>r.json())
 export const rejectRequest = (id) => fetch(`${BASE}/rewards/requests/${id}/reject`, { method:'POST' }).then(r=>r.json())
 
+export const getBounties = () => fetch(`${BASE}/bounties`).then(r => r.json())
+export const getPendingBounties = () => fetch(`${BASE}/bounties/pending`).then(r => r.json())
+export const getCompletedBounties = (date) => fetch(`${BASE}/bounties/completed${date ? `?date=${date}` : ''}`).then(r => r.json())
+export const createBounty = (data) => fetch(`${BASE}/bounties`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
+export const updateBounty = (id, data) => fetch(`${BASE}/bounties/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
+export const deleteBounty = (id) => fetch(`${BASE}/bounties/${id}`, { method:'DELETE' }).then(r=>r.json())
+export const claimBounty = (id, kid_id) => fetch(`${BASE}/bounties/${id}/claim`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ kid_id }) }).then(r=>r.json())
+export const unclaimBounty = (id) => fetch(`${BASE}/bounties/${id}/unclaim`, { method:'POST' }).then(r=>r.json())
+export const verifyBounty = (id, approved) => fetch(`${BASE}/bounties/${id}/verify`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ approved }) }).then(r=>r.json())
+
 export const getShoutouts = (date) => fetch(`${BASE}/shoutouts${date ? `?date=${date}` : ''}`).then(r => r.json())
 export const getPendingShoutouts = () => fetch(`${BASE}/shoutouts/pending`).then(r => r.json())
 export const createShoutout = (data) => fetch(`${BASE}/shoutouts`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
 export const deleteShoutout = (id) => fetch(`${BASE}/shoutouts/${id}`, { method:'DELETE' }).then(r=>r.json())
 export const awardShoutout = (id, points) => fetch(`${BASE}/shoutouts/${id}/award`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ points }) }).then(r=>r.json())
 export const acknowledgeShoutout = (id) => fetch(`${BASE}/shoutouts/${id}/acknowledge`, { method:'POST' }).then(r=>r.json())
+
+export const getDemerits = (date) => fetch(`${BASE}/demerits${date ? `?date=${date}` : ''}`).then(r => r.json())
+export const createDemerit = (data) => fetch(`${BASE}/demerits`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
+export const deleteDemerit = (id) => fetch(`${BASE}/demerits/${id}`, { method:'DELETE' }).then(r=>r.json())
 
 export const verifyPin = (pin) => fetch(`${BASE}/pin/verify?pin=${pin}`).then(r=>r.json())
 export const updatePin = (pin) => fetch(`${BASE}/pin`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pin }) }).then(r=>r.json())
