@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createKid, updateKid, deleteKid, createChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, approveSuggestion, rejectSuggestion, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateCurrencyMode, updateCurrencyRate, adjustKidPoints, awardShoutout, acknowledgeShoutout, deleteShoutout, createDemerit, setChoreHabit, resolveMastery, reviveChore, restartChore, updateHabitSettings, createBounty, updateBounty, deleteBounty, verifyBounty } from '../api'
+import { createKid, updateKid, deleteKid, createChore, updateChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, approveSuggestion, rejectSuggestion, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateCurrencyMode, updateCurrencyRate, adjustKidPoints, awardShoutout, acknowledgeShoutout, deleteShoutout, createDemerit, setChoreHabit, resolveMastery, reviveChore, restartChore, updateHabitSettings, createBounty, updateBounty, deleteBounty, verifyBounty } from '../api'
 import HabitMeter from './HabitMeter'
 import { DEMERIT_EMOJI } from './KidColumn'
 
@@ -32,6 +32,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
   const [tab, setTab] = useState('pending')
   const [newKid, setNewKid] = useState({ name:'', emoji:'🦊', color:'#7F77DD' })
   const [newChore, setNewChore] = useState({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6', habit_enabled:false })
+  const [editingChore, setEditingChore] = useState(null)
   const [newReward, setNewReward] = useState({ name:'', points:50 })
   const [newBounty, setNewBounty] = useState({ name:'', points:defaultPoints })
   const [editingBounty, setEditingBounty] = useState(null)
@@ -65,6 +66,12 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
     await Promise.all(newChore.kid_ids.map(kid_id => createChore({ ...newChore, kid_id })))
     onRefresh(); showToast('Chore added!')
     setNewChore({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6', habit_enabled:false })
+  }
+
+  const saveChore = async () => {
+    if (!editingChore.name.trim()) return
+    await updateChore(editingChore.id, { name: editingChore.name.trim(), points: editingChore.points, recurring: editingChore.recurring })
+    onRefresh(); showToast('Saved!'); setEditingChore(null)
   }
 
   const toggleHabit = async (chore) => {
@@ -237,6 +244,33 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                 <div style={{ fontSize:17, color:'var(--cb-text-muted)', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>{kid.emoji} {kid.name}</div>
                 {allChores.filter(c=>c.kid_id===kid.id).map(c=>(
                   <div key={c.id} style={{ background:'var(--cb-surface2)', border:'1px solid var(--cb-border)', borderRadius:10, padding:'14px 18px', marginBottom:8 }}>
+                    {editingChore?.id === c.id ? (
+                      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                        <input value={editingChore.name} onChange={e=>setEditingChore({...editingChore,name:e.target.value})} placeholder="Chore name" style={inputStyle} autoFocus />
+                        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                          <AmountInput points={editingChore.points} onPoints={v=>setEditingChore({...editingChore,points:v})} currencyMode={currencyMode} currencyRate={currencyRate} />
+                          <span style={{ fontSize:16, color:'var(--cb-text-muted)' }}>{currencyMode === 'dollars' ? 'Reward amount' : 'Reward Points'}</span>
+                        </div>
+                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d,i) => {
+                            const active = editingChore.recurring.split(',').map(Number).includes(i)
+                            return (
+                              <button key={i} type="button" onClick={() => {
+                                const days = editingChore.recurring.split(',').map(Number)
+                                const next = active ? days.filter(x=>x!==i) : [...days,i].sort((a,b)=>a-b)
+                                if (next.length > 0) setEditingChore({...editingChore, recurring: next.join(',')})
+                              }} style={{ padding:'10px 14px', borderRadius:8, border:'none', background: active?'#7F77DD':'var(--cb-border)', color: active?'#ffffff':'var(--cb-text-faint)', fontSize:15, fontWeight:700, cursor:'pointer', opacity: active?1:0.5 }}>
+                                {d}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <div style={{ display:'flex', gap:10 }}>
+                          <button onClick={saveChore} style={{ ...addBtnStyle, flex:1 }}>Save</button>
+                          <button onClick={()=>setEditingChore(null)} style={{ flex:1, padding:'12px 0', background:'var(--cb-border)', border:'none', borderRadius:8, color:'var(--cb-text-sub)', fontSize:17, cursor:'pointer' }}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
                     <div style={{ display:'flex', alignItems:'center' }}>
                       <span style={{ flex:1, fontSize:18, color:'var(--cb-text)', fontWeight:600, minWidth:0 }}>
                         {c.name}
@@ -247,10 +281,13 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                         style={{ padding:'6px 10px', marginRight:6, borderRadius:20, border:`1px solid ${c.habit_enabled ? '#1D9E75' : 'var(--cb-border2)'}`, background: c.habit_enabled ? '#1D9E7522' : 'transparent', color: c.habit_enabled ? '#1D9E75' : 'var(--cb-text-dim)', fontSize:13, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
                         🌱 Habit {c.habit_enabled ? 'on' : 'off'}
                       </button>
+                      <button onClick={()=>setEditingChore({id:c.id,name:c.name,points:c.base_points ?? c.points,recurring:c.recurring})}
+                        style={{ background:'none', border:'none', color:'#7F77DD', cursor:'pointer', fontSize:22, padding:'0 8px', flexShrink:0 }}>✎</button>
                       <button onClick={async()=>{await deleteChore(c.id);onRefresh()}}
                         style={{ background:'none', border:'none', color:'var(--cb-text-dim)', cursor:'pointer', fontSize:22, flexShrink:0 }}>&#x2715;</button>
                     </div>
-                    {c.habit_enabled && <HabitMeter chore={c} color={kid.color} />}
+                    )}
+                    {c.habit_enabled && editingChore?.id !== c.id && <HabitMeter chore={c} color={kid.color} />}
                   </div>
                 ))}
                 {allChores.filter(c=>c.kid_id===kid.id).length === 0 && (
