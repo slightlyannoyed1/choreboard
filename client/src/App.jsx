@@ -75,6 +75,7 @@ export default function App() {
   const [pinInput, setPinInput] = useState('')
   const [showPin, setShowPin] = useState(false)
   const [pinError, setPinError] = useState(false)
+  const [adminPin, setAdminPin] = useState('')
   const [now, setNow] = useState(new Date())
   const [timezone, setTimezone] = useState('America/New_York')
   const [isDark, setIsDark] = useState(() => localStorage.getItem('cb-theme') !== 'light')
@@ -190,7 +191,7 @@ export default function App() {
     setPinInput(next)
     if (next.length === 4) {
       const { valid } = await verifyPin(next)
-      if (valid) { setShowPin(false); setView('admin') }
+      if (valid) { setAdminPin(next); setShowPin(false); setView('admin') }
       else { setPinError(true); setTimeout(() => { setPinInput(''); setPinError(false) }, 800) }
     }
   }
@@ -272,7 +273,7 @@ export default function App() {
 
       {view === 'board' && <Board kids={kids} chores={chores} requests={requests} bounties={bounties} selectedDate={selectedDate} locked={daysBack > EDIT_WINDOW_DAYS} onRefresh={refresh} showToast={showToast} formatPoints={formatPoints} />}
       {view === 'rewards' && <RewardsView kids={kids} rewards={rewards} suggestions={suggestions} onRefresh={refresh} showToast={showToast} formatPoints={formatPoints} currencyMode={currencyMode} currencyRate={currencyRate} />}
-      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} suggestions={suggestions} pendingShoutouts={pendingShoutouts} masteredChores={masteredChores} deadChores={deadChores} bounties={bounties} pendingBounties={pendingBounties} habitSettings={habitSettings} onHabitSettingsChange={setHabitSettings} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} currencyMode={currencyMode} onCurrencyModeChange={setCurrencyMode} currencyRate={currencyRate} onCurrencyRateChange={setCurrencyRate} formatPoints={formatPoints} textSize={textSize} onTextSizeChange={size => { setTextSize(size); localStorage.setItem('cb-text-size', size) }} isDark={isDark} onToggleTheme={toggleTheme} onRefresh={refresh} showToast={showToast} setView={setView} />}
+      {view === 'admin' && <AdminView kids={kids} allChores={allChores} rewards={rewards} requests={requests} suggestions={suggestions} pendingShoutouts={pendingShoutouts} masteredChores={masteredChores} deadChores={deadChores} bounties={bounties} pendingBounties={pendingBounties} habitSettings={habitSettings} onHabitSettingsChange={setHabitSettings} timezone={timezone} onTimezoneChange={setTimezone} defaultPoints={defaultPoints} onDefaultPointsChange={setDefaultPoints} currencyMode={currencyMode} onCurrencyModeChange={setCurrencyMode} currencyRate={currencyRate} onCurrencyRateChange={setCurrencyRate} formatPoints={formatPoints} textSize={textSize} onTextSizeChange={size => { setTextSize(size); localStorage.setItem('cb-text-size', size) }} isDark={isDark} onToggleTheme={toggleTheme} adminPin={adminPin} onRefresh={refresh} showToast={showToast} setView={setView} />}
 
       {showPin && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 }}>

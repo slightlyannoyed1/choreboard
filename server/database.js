@@ -116,6 +116,12 @@ db.exec(`
 
 // Migrate: add acknowledged column if not present
 try { db.exec('ALTER TABLE redemption_requests ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0') } catch(_) {}
+// Migrate: the kid's balance right after claiming, so the admin can see when a claim
+// went into debt.
+try { db.exec('ALTER TABLE redemption_requests ADD COLUMN balance_after INTEGER DEFAULT NULL') } catch(_) {}
+// Migrate: what the claim actually cost, so a rejection refunds the right amount even
+// if the reward's price has been edited since.
+try { db.exec('ALTER TABLE redemption_requests ADD COLUMN points_spent INTEGER DEFAULT NULL') } catch(_) {}
 // Migrate: add shoutout award columns if not present
 try { db.exec('ALTER TABLE kid_shoutouts ADD COLUMN awarded INTEGER NOT NULL DEFAULT 0') } catch(_) {}
 try { db.exec('ALTER TABLE kid_shoutouts ADD COLUMN awarded_points INTEGER DEFAULT NULL') } catch(_) {}

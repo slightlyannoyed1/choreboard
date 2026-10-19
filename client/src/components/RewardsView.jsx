@@ -10,6 +10,8 @@ export default function RewardsView({ kids, rewards, suggestions, onRefresh, sho
 
   const handleClaim = async (reward) => {
     if (!kid) return
+    const after = kid.points - reward.points
+    if (after < 0 && !window.confirm(`${kid.name} will owe ${formatPoints(-after)} after claiming ${reward.name}. No more rewards until it's paid back. Claim anyway?`)) return
     const res = await createRequest({ kid_id: kid.id, reward_id: reward.id })
     if (res.id) { showToast(`🏆 ${reward.name} claimed!`); onRefresh() }
     else showToast(res.error || 'Could not claim reward')
@@ -35,8 +37,11 @@ export default function RewardsView({ kids, rewards, suggestions, onRefresh, sho
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(min(280px,100%),1fr))', gap:12 }}>
         {rewards.map(r => {
-          const pct = kid ? Math.min((kid.points / r.points) * 100, 100) : 0
+          const pct = kid ? Math.max(0, Math.min((kid.points / r.points) * 100, 100)) : 0
           const canAfford = kid && kid.points >= r.points
+          // Can't afford it, but not in debt yet: one reward on credit is allowed.
+          const onCredit = kid && !canAfford && kid.points >= 0
+          const canClaim = canAfford || onCredit
           return (
             <div key={r.id} style={{ background:'var(--cb-surface)', border:'1px solid var(--cb-border)', borderRadius:12, padding:20, display:'flex', flexDirection:'column', gap:14 }}>
               <div style={{ fontSize:20, color:'var(--cb-text)', fontWeight:700 }}>{r.name}</div>
@@ -59,9 +64,12 @@ export default function RewardsView({ kids, rewards, suggestions, onRefresh, sho
                 </div>
               )}
 
-              <button onClick={() => handleClaim(r)} disabled={!kid || !canAfford}
-                style={{ padding:'14px 0', background: canAfford&&kid?'#534AB7':'var(--cb-surface2)', border:'none', borderRadius:8, color: canAfford&&kid?'#fff':'var(--cb-text-faint)', fontSize:17, cursor: canAfford&&kid?'pointer':'not-allowed', fontWeight:700 }}>
-                {!kid ? 'Select a kid' : canAfford ? '🏆 Claim Reward' : `Need ${formatPoints(r.points - kid.points)} more`}
+              <button onClick={() => handleClaim(r)} disabled={!canClaim}
+                style={{ padding:'14px 0', background: canAfford ? '#534AB7' : onCredit ? 'transparent' : 'var(--cb-surface2)', border: onCredit ? '2px solid #BA7517' : 'none', borderRadius:8, color: canAfford ? '#fff' : onCredit ? '#BA7517' : 'var(--cb-text-faint)', fontSize:17, cursor: canClaim ? 'pointer' : 'not-allowed', fontWeight:700 }}>
+                {!kid ? 'Select a kid'
+                  : canAfford ? '🏆 Claim Reward'
+                  : onCredit ? `Claim on credit (owe ${formatPoints(r.points - kid.points)})`
+                  : 'Pay off debt first'}
               </button>
             </div>
           )

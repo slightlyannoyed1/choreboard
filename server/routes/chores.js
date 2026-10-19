@@ -73,12 +73,11 @@ function sweepDeadHabits(date, byChore) {
 // so it's expressed in the same currency as everything else -- no thinking in raw
 // points -- and it scales on its own as habit payouts decay.
 function awardConsistencyBonuses(date, byChore) {
-  const { healthThreshold, consistencyPct } = settings()
+  const { consistencyPct } = settings()
   if (consistencyPct <= 0) return
 
   const weekStart = addDays(date, -dowForDate(date))   // Sunday of the current week
   const lastWeekStart = addDays(weekStart, -7)
-  const lastWeekEnd = addDays(weekStart, -1)
 
   const kids = db.prepare('SELECT * FROM kids').all()
   for (const kid of kids) {
@@ -87,34 +86,72 @@ function awardConsistencyBonuses(date, byChore) {
     ).get(kid.id, lastWeekStart)
     if (already) continue
 
-    const chores = db.prepare(
-      "SELECT * FROM chores WHERE kid_id=? AND active=1 AND habit_enabled=1 AND state='active'"
-    ).all(kid.id).filter(c => activityStart(c) <= lastWeekEnd)
-
-    // Nothing to be consistent about: record a zero award so we don't re-check daily.
-    const earned = chores.length > 0 && chores.every(c =>
-      snapshot(c, byChore[c.id] || [], lastWeekEnd).health >= healthThreshold
-    )
-
-    // Base: everything the kid earned from tracked habits during the week just ended.
-    const base = earned ? db.prepare(`
-      SELECT COALESCE(SUM(cp.points_awarded), 0) AS total
-      FROM completions cp JOIN chores c ON c.id = cp.chore_id
-      WHERE cp.kid_id = ? AND c.habit_enabled = 1
-        AND cp.completed_date >= ? AND cp.completed_date <= ?
-    `).get(kid.id, lastWeekStart, lastWeekEnd).total : 0
-    const points = earned ? Math.round(base * consistencyPct / 100) : 0
+    // Nothing to be consistent about still records a zero award, so we don't re-check daily.
+    const points = consistencyPointsFor(kid.id, lastWeekStart, byChore)
 
     // The points move only if this insert is the one that claimed the week, so the
     // bonus can never be paid twice.
     const claimed = db.prepare(
       'INSERT OR IGNORE INTO bonus_awards (kid_id, type, period_key, points) VALUES (?, ?, ?, ?)'
     ).run(kid.id, 'consistency', lastWeekStart, points)
-    if (claimed.changes === 0 || !earned || points <= 0) continue
+    if (claimed.changes === 0 || points <= 0) continue
 
     db.prepare('UPDATE kids SET points = points + ? WHERE id=?').run(points, kid.id)
     logAudit(kid.id, 'consistency_bonus', `Consistency bonus (${consistencyPct}%): week of ${lastWeekStart}`, points)
   }
+}
+
+// What the consistency bonus for the week starting `weekStart` comes to, judged on the
+// completions as they stand now. Zero if any tracked habit fell below the threshold.
+function consistencyPointsFor(kidId, weekStart, byChore) {
+  const { healthThreshold, consistencyPct } = settings()
+  const weekEnd = addDays(weekStart, 6)
+
+  const chores = db.prepare(
+    "SELECT * FROM chores WHERE kid_id=? AND active=1 AND habit_enabled=1 AND state='active'"
+  ).all(kidId).filter(c => activityStart(c) <= weekEnd)
+
+  const earned = chores.length > 0 && chores.every(c =>
+    snapshot(c, byChore[c.id] || [], weekEnd).health >= healthThreshold
+  )
+  if (!earned) return 0
+
+  // Base: everything the kid earned from tracked habits during that week.
+  const base = db.prepare(`
+    SELECT COALESCE(SUM(cp.points_awarded), 0) AS total
+    FROM completions cp JOIN chores c ON c.id = cp.chore_id
+    WHERE cp.kid_id = ? AND c.habit_enabled = 1
+      AND cp.completed_date >= ? AND cp.completed_date <= ?
+  `).get(kidId, weekStart, weekEnd).total
+  return Math.round(base * consistencyPct / 100)
+}
+
+// Editing a past day can change both the health an already-settled week was judged on
+// and what its habits paid. These two bracket an edit: value every settled week the edit
+// could reach, make the edit, value them again, and pay or take back the difference.
+// Moving by the difference -- rather than overwriting -- means a bonus percentage
+// changed since the week was settled doesn't get applied retroactively.
+function settledConsistencyWeeks(kidId, fromDate) {
+  const rows = db.prepare(
+    "SELECT period_key FROM bonus_awards WHERE kid_id=? AND type='consistency' AND period_key>=?"
+  ).all(kidId, addDays(fromDate, -6))
+  if (rows.length === 0) return {}
+  const byChore = completionsByChore()
+  return Object.fromEntries(rows.map(r => [r.period_key, consistencyPointsFor(kidId, r.period_key, byChore)]))
+}
+
+function resettleConsistency(kidId, before, after) {
+  let total = 0
+  for (const week of Object.keys(before)) {
+    const delta = (after[week] ?? 0) - before[week]
+    if (delta === 0) continue
+    db.prepare("UPDATE bonus_awards SET points = points + ? WHERE kid_id=? AND type='consistency' AND period_key=?")
+      .run(delta, kidId, week)
+    db.prepare('UPDATE kids SET points = points + ? WHERE id=?').run(delta, kidId)
+    logAudit(kidId, 'consistency_bonus', `Consistency bonus adjusted: week of ${week}`, delta)
+    total += delta
+  }
+  return total
 }
 
 router.get('/all', (_req, res) => {
@@ -199,12 +236,76 @@ router.post('/', (req, res) => {
 // How far back a chore can still be ticked off. Older days stay visible on the
 // board -- they're just read-only.
 const EDIT_WINDOW_DAYS = 3
+// A parent catching up on missed check-offs can reach further back by sending the
+// admin PIN with the request.
+const ADMIN_BACKFILL_DAYS = 30
+
+function editWindowFor(req) {
+  const pin = req.body && req.body.pin
+  if (!pin) return EDIT_WINDOW_DAYS
+  const row = db.prepare('SELECT value FROM settings WHERE key=?').get('admin_pin')
+  return pin === (row ? row.value : '1234') ? ADMIN_BACKFILL_DAYS : EDIT_WINDOW_DAYS
+}
+
+// What a completion on `date` pays, given every date the chore was done. Only the
+// completions before `date` matter: they set the streak and how mature the habit is.
+function payoutFor(chore, dates, date) {
+  const reps = chore.habit_enabled ? completionsSince(dates.filter(d => d < date), masteryStart(chore)) : 0
+  const streak = streakForCompletion(chore, new Set(dates), date)
+  return computeValue(chore, { reps, streak })
+}
+
+// Checking or unchecking an earlier day changes the streak and maturity every later
+// completion was paid on. Each later payout moves by the difference the edit made --
+// not a fresh recompute -- so a chore price edited since never rewrites old pay.
+function repriceLaterCompletions(chore, before, after, date) {
+  if (!chore.habit_enabled) return 0
+  const later = db.prepare(
+    'SELECT id, completed_date, points_awarded FROM completions WHERE chore_id=? AND completed_date>?'
+  ).all(chore.id, date)
+
+  let total = 0
+  for (const c of later) {
+    const delta = payoutFor(chore, after, c.completed_date) - payoutFor(chore, before, c.completed_date)
+    if (delta === 0) continue
+    db.prepare('UPDATE completions SET points_awarded=? WHERE id=?')
+      .run((c.points_awarded ?? chore.points) + delta, c.id)
+    total += delta
+  }
+  if (total !== 0) {
+    db.prepare('UPDATE kids SET points = points + ? WHERE id=?').run(total, chore.kid_id)
+    logAudit(chore.kid_id, 'chore_repriced', `Streak recalculated: ${chore.name}`, total)
+  }
+  return total
+}
+
+const graduationCycle = chore => `chore-${chore.id}-${masteryStart(chore)}`
+
+// Unchecking can take a habit back below mastery. The graduation goes with it -- the
+// bonus is taken back and the parent prompt cleared -- and is paid again if the habit
+// re-crosses the line.
+function revokeGraduationIfBelow(chore, dates) {
+  if (!chore.habit_enabled || !chore.mastered_at) return 0
+  const masteryReps = chore.mastery_reps || masteryRepsFor(chore.recurring, settings().masteryDays)
+  if (completionsSince(dates, masteryStart(chore)) >= masteryReps) return 0
+
+  db.prepare('UPDATE chores SET mastered_at=NULL, mastery_ack=0 WHERE id=?').run(chore.id)
+  const award = db.prepare(
+    "SELECT id, points FROM bonus_awards WHERE kid_id=? AND type='graduation' AND period_key=?"
+  ).get(chore.kid_id, graduationCycle(chore))
+  if (!award) return 0
+  db.prepare('DELETE FROM bonus_awards WHERE id=?').run(award.id)
+  db.prepare('UPDATE kids SET points = points - ? WHERE id=?').run(award.points, chore.kid_id)
+  logAudit(chore.kid_id, 'graduation_revoked', `Mastery undone: ${chore.name}`, -award.points)
+  return award.points
+}
 
 router.post('/:id/complete', (req, res) => {
   const date = req.query.date || todayStr()
   const today = todayStr()
   const daysAgo = daysBetween(date, today)
-  if (daysAgo > EDIT_WINDOW_DAYS) return res.status(400).json({ error: `Cannot complete chores more than ${EDIT_WINDOW_DAYS} days ago` })
+  const editWindow = editWindowFor(req)
+  if (daysAgo > editWindow) return res.status(400).json({ error: `Cannot complete chores more than ${editWindow} days ago` })
   if (daysAgo < -14) return res.status(400).json({ error: 'Cannot complete chores more than 14 days in advance' })
 
   const chore = db.prepare('SELECT * FROM chores WHERE id=?').get(req.params.id)
@@ -216,51 +317,60 @@ router.post('/:id/complete', (req, res) => {
   ).get(chore.id, date)
   if (already) return res.status(400).json({ error: 'Already completed today' })
 
-  const dates = completionsFor(chore.id)
-  const doneSet = new Set(dates)
-  const reps = chore.habit_enabled ? completionsSince(dates.filter(d => d < date), masteryStart(chore)) : 0
-  const streak = streakForCompletion(chore, doneSet, date)
-  const awarded = computeValue(chore, { reps, streak })
+  const before = completionsFor(chore.id)
+  const after = [...before, date].sort()
+  const awarded = payoutFor(chore, before, date)
 
-  db.prepare(
-    'INSERT INTO completions (chore_id, kid_id, completed_date, points_awarded) VALUES (?, ?, ?, ?)'
-  ).run(chore.id, chore.kid_id, date, awarded)
-  db.prepare('UPDATE kids SET points = points + ? WHERE id=?').run(awarded, chore.kid_id)
-  logAudit(chore.kid_id, 'chore_complete', chore.name, awarded)
+  const result = db.transaction(() => {
+    const weeksBefore = settledConsistencyWeeks(chore.kid_id, date)
 
-  // Graduation: the rep that tips the chore into mastery pays a one-time lump and
-  // flags it for a parent decision.
-  let graduation = null
-  if (chore.habit_enabled && !chore.mastered_at) {
-    const totalReps = completionsSince([...dates, date], masteryStart(chore))
-    const masteryReps = chore.mastery_reps || masteryRepsFor(chore.recurring, settings().masteryDays)
-    if (totalReps >= masteryReps) {
-      const bonus = Math.max(1, Math.round(chore.points * settings().graduationMultiplier))
-      // Keyed to the habit cycle, not the chore: if a parent restarts the habit later
-      // it gets a fresh decay_start_date and can be mastered -- and paid for -- again.
-      const cycle = `chore-${chore.id}-${masteryStart(chore)}`
-      const claimed = db.prepare(
-        'INSERT OR IGNORE INTO bonus_awards (kid_id, type, period_key, points) VALUES (?, ?, ?, ?)'
-      ).run(chore.kid_id, 'graduation', cycle, bonus)
+    db.prepare(
+      'INSERT INTO completions (chore_id, kid_id, completed_date, points_awarded) VALUES (?, ?, ?, ?)'
+    ).run(chore.id, chore.kid_id, date, awarded)
+    db.prepare('UPDATE kids SET points = points + ? WHERE id=?').run(awarded, chore.kid_id)
+    logAudit(chore.kid_id, 'chore_complete', chore.name, awarded)
 
-      db.prepare('UPDATE chores SET mastered_at=?, mastery_ack=0 WHERE id=?').run(date, chore.id)
-      if (claimed.changes > 0) {
-        db.prepare('UPDATE kids SET points = points + ? WHERE id=?').run(bonus, chore.kid_id)
-        logAudit(chore.kid_id, 'graduation_bonus', `Mastered: ${chore.name}`, bonus)
-        graduation = { bonus, chore_name: chore.name }
+    const laterAdjustment = repriceLaterCompletions(chore, before, after, date)
+
+    // Graduation: the rep that tips the chore into mastery pays a one-time lump and
+    // flags it for a parent decision.
+    let graduation = null
+    if (chore.habit_enabled && !chore.mastered_at) {
+      const totalReps = completionsSince(after, masteryStart(chore))
+      const masteryReps = chore.mastery_reps || masteryRepsFor(chore.recurring, settings().masteryDays)
+      if (totalReps >= masteryReps) {
+        const bonus = Math.max(1, Math.round(chore.points * settings().graduationMultiplier))
+        // Keyed to the habit cycle, not the chore: if a parent restarts the habit later
+        // it gets a fresh decay_start_date and can be mastered -- and paid for -- again.
+        const claimed = db.prepare(
+          'INSERT OR IGNORE INTO bonus_awards (kid_id, type, period_key, points) VALUES (?, ?, ?, ?)'
+        ).run(chore.kid_id, 'graduation', graduationCycle(chore), bonus)
+
+        db.prepare('UPDATE chores SET mastered_at=?, mastery_ack=0 WHERE id=?').run(date, chore.id)
+        if (claimed.changes > 0) {
+          db.prepare('UPDATE kids SET points = points + ? WHERE id=?').run(bonus, chore.kid_id)
+          logAudit(chore.kid_id, 'graduation_bonus', `Mastered: ${chore.name}`, bonus)
+          graduation = { bonus, chore_name: chore.name }
+        }
       }
     }
-  }
 
-  res.json({ ok: true, points_awarded: awarded, graduation })
+    const bonusAdjustment = resettleConsistency(
+      chore.kid_id, weeksBefore, settledConsistencyWeeks(chore.kid_id, date)
+    )
+    return { later_adjustment: laterAdjustment, bonus_adjustment: bonusAdjustment, graduation }
+  })()
+
+  res.json({ ok: true, points_awarded: awarded, ...result })
 })
 
 router.delete('/:id/complete', (req, res) => {
   const date = req.query.date || todayStr()
   // Unchecking is bounded by the same window: outside it a kid could strip the points
   // off an old completion and then be unable to tick it back on.
-  if (daysBetween(date, todayStr()) > EDIT_WINDOW_DAYS) {
-    return res.status(400).json({ error: `Cannot change chores more than ${EDIT_WINDOW_DAYS} days ago` })
+  const editWindow = editWindowFor(req)
+  if (daysBetween(date, todayStr()) > editWindow) {
+    return res.status(400).json({ error: `Cannot change chores more than ${editWindow} days ago` })
   }
 
   const chore = db.prepare('SELECT * FROM chores WHERE id=?').get(req.params.id)
@@ -274,12 +384,25 @@ router.delete('/:id/complete', (req, res) => {
   // Refund exactly what was paid. Legacy rows predate points_awarded and were paid
   // the chore's flat value.
   const refund = completion.points_awarded ?? chore.points
+  const before = completionsFor(chore.id)
+  const after = before.filter(d => d !== date)
 
-  db.prepare('DELETE FROM completions WHERE id=?').run(completion.id)
-  db.prepare('UPDATE kids SET points = points - ? WHERE id=?').run(refund, chore.kid_id)
-  logAudit(chore.kid_id, 'chore_uncomplete', chore.name, -refund)
+  const result = db.transaction(() => {
+    const weeksBefore = settledConsistencyWeeks(chore.kid_id, date)
 
-  res.json({ ok: true, points_removed: refund })
+    db.prepare('DELETE FROM completions WHERE id=?').run(completion.id)
+    db.prepare('UPDATE kids SET points = points - ? WHERE id=?').run(refund, chore.kid_id)
+    logAudit(chore.kid_id, 'chore_uncomplete', chore.name, -refund)
+
+    const laterAdjustment = repriceLaterCompletions(chore, before, after, date)
+    const graduationRevoked = revokeGraduationIfBelow(chore, after)
+    const bonusAdjustment = resettleConsistency(
+      chore.kid_id, weeksBefore, settledConsistencyWeeks(chore.kid_id, date)
+    )
+    return { later_adjustment: laterAdjustment, bonus_adjustment: bonusAdjustment - graduationRevoked }
+  })()
+
+  res.json({ ok: true, points_removed: refund, ...result })
 })
 
 // Turn habit tracking on or off. Switching it on starts the mastery clock today, so

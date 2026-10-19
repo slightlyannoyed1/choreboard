@@ -23,3 +23,8 @@ Thumbs.db
 # Editor
 .vscode/
 *.swp
+
+# Local podman test data (scripts/test-local.sh)
+.dev-data/
+scripts/test-local.sh
+CLAUDE.md

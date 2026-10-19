@@ -161,7 +161,11 @@ function snapshot(chore, completionDates, asOf) {
   const doneSet = new Set(completionDates)
   const anchor = anchorDate(chore, doneSet, asOf)
 
-  const reps = chore.habit_enabled ? completionsSince(completionDates, masteryStart(chore)) : 0
+  // Only reps up to asOf: a past day shows the habit as mature as it was then, not as
+  // mature as later completions have since made it.
+  const reps = chore.habit_enabled
+    ? completionsSince(completionDates.filter(d => d <= asOf), masteryStart(chore))
+    : 0
   const masteryReps = chore.mastery_reps || masteryRepsFor(chore.recurring, 60)
   const streak = foldStreak(chore, doneSet, asOf, anchor)
 

@@ -44,7 +44,7 @@ router.get('/redeemed', (req, res) => {
 // Returns all unacknowledged awards (for admin dot + pending tab + kid cards)
 router.get('/requests', (_req, res) => {
   const rows = db.prepare(`
-    SELECT rr.id, rr.acknowledged, rr.created_at,
+    SELECT rr.id, rr.acknowledged, rr.created_at, rr.balance_after,
       k.name as kid_name, k.id as kid_id,
       r.name as reward_name, r.points as reward_points, r.id as reward_id
     FROM redemption_requests rr
@@ -56,17 +56,20 @@ router.get('/requests', (_req, res) => {
   res.json(rows)
 })
 
-// Kid claims a reward — points deducted immediately
+// Kid claims a reward — points deducted immediately. A kid who can't afford it may
+// still claim it on credit, but only from a non-negative balance: once they're in
+// debt they have to earn their way back before claiming anything else.
 router.post('/requests', (req, res) => {
   const { kid_id, reward_id } = req.body
   const kid = db.prepare('SELECT * FROM kids WHERE id=?').get(kid_id)
   const reward = db.prepare('SELECT * FROM rewards WHERE id=?').get(reward_id)
   if (!kid || !reward) return res.status(404).json({ error: 'Not found' })
-  if (kid.points < reward.points) return res.status(400).json({ error: 'Not enough points' })
+  if (kid.points < 0) return res.status(400).json({ error: 'Already in debt — earn it back before claiming another reward' })
+  const balanceAfter = kid.points - reward.points
   db.prepare('UPDATE kids SET points = points - ? WHERE id=?').run(reward.points, kid_id)
   const result = db.prepare(
-    'INSERT INTO redemption_requests (kid_id, reward_id, acknowledged) VALUES (?, ?, 0)'
-  ).run(kid_id, reward_id)
+    'INSERT INTO redemption_requests (kid_id, reward_id, acknowledged, balance_after, points_spent) VALUES (?, ?, 0, ?, ?)'
+  ).run(kid_id, reward_id, balanceAfter, reward.points)
 
   db.prepare('INSERT INTO audit_log (kid_id, kid_name, type, description, points) VALUES (?, ?, ?, ?, ?)')
     .run(kid_id, kid.name, 'reward_claimed', reward.name, -reward.points)
@@ -74,21 +77,27 @@ router.post('/requests', (req, res) => {
   res.json({ id: result.lastInsertRowid })
 })
 
-// Admin rejects — request removed, no point refund
+// Admin rejects — request removed and the points refunded
 router.post('/requests/:id/reject', (req, res) => {
   const request = db.prepare(`
-    SELECT rr.kid_id, k.name as kid_name, r.name as reward_name
+    SELECT rr.kid_id, rr.acknowledged, rr.points_spent, k.name as kid_name, r.name as reward_name, r.points as reward_points
     FROM redemption_requests rr
     JOIN kids k ON k.id = rr.kid_id
     JOIN rewards r ON r.id = rr.reward_id
     WHERE rr.id=?
   `).get(req.params.id)
+  if (!request) return res.status(404).json({ error: 'Not found' })
+  // Only a pending request can be rejected, so a double tap can't refund twice.
+  if (request.acknowledged) return res.status(400).json({ error: 'Already handled' })
+
+  // Refund exactly what was paid. Legacy rows predate points_spent and were paid the
+  // reward's price.
+  const refund = request.points_spent ?? request.reward_points
   db.prepare('UPDATE redemption_requests SET acknowledged=1, status=? WHERE id=?').run('rejected', req.params.id)
-  if (request) {
-    db.prepare('INSERT INTO audit_log (kid_id, kid_name, type, description, points) VALUES (?, ?, ?, ?, ?)')
-      .run(request.kid_id, request.kid_name, 'reward_rejected', `Rejected: ${request.reward_name}`, 0)
-  }
-  res.json({ ok: true })
+  db.prepare('UPDATE kids SET points = points + ? WHERE id=?').run(refund, request.kid_id)
+  db.prepare('INSERT INTO audit_log (kid_id, kid_name, type, description, points) VALUES (?, ?, ?, ?, ?)')
+    .run(request.kid_id, request.kid_name, 'reward_rejected', `Rejected: ${request.reward_name} (refunded)`, refund)
+  res.json({ ok: true, points_refunded: refund })
 })
 
 // Admin acknowledges — prize has been handed out

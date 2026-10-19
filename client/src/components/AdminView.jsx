@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { createKid, updateKid, deleteKid, createChore, updateChore, deleteChore, createReward, updateReward, deleteReward, acknowledgeRequest, rejectRequest, approveSuggestion, rejectSuggestion, updatePin, getAuditLog, updateTimezone, updateDefaultPoints, updateCurrencyMode, updateCurrencyRate, adjustKidPoints, awardShoutout, acknowledgeShoutout, deleteShoutout, createDemerit, setChoreHabit, resolveMastery, reviveChore, restartChore, updateHabitSettings, createBounty, updateBounty, deleteBounty, verifyBounty } from '../api'
 import HabitMeter from './HabitMeter'
 import { DEMERIT_EMOJI } from './KidColumn'
+import BackfillPanel from './BackfillPanel'
 
 const tzLabel = (tz) => {
   const offset = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'shortOffset' })
@@ -28,7 +29,7 @@ const localDateStr = () => {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
-export default function AdminView({ kids, allChores, rewards, requests, suggestions, pendingShoutouts, masteredChores, deadChores, bounties, pendingBounties, habitSettings, onHabitSettingsChange, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, currencyMode, onCurrencyModeChange, currencyRate, onCurrencyRateChange, formatPoints, textSize, onTextSizeChange, isDark, onToggleTheme, onRefresh, showToast, setView }) {
+export default function AdminView({ kids, allChores, rewards, requests, suggestions, pendingShoutouts, masteredChores, deadChores, bounties, pendingBounties, habitSettings, onHabitSettingsChange, timezone, onTimezoneChange, defaultPoints, onDefaultPointsChange, currencyMode, onCurrencyModeChange, currencyRate, onCurrencyRateChange, formatPoints, textSize, onTextSizeChange, isDark, onToggleTheme, adminPin, onRefresh, showToast, setView }) {
   const [tab, setTab] = useState('pending')
   const [newKid, setNewKid] = useState({ name:'', emoji:'🦊', color:'#7F77DD' })
   const [newChore, setNewChore] = useState({ kid_ids:[], name:'', points:defaultPoints, recurring:'0,1,2,3,4,5,6', habit_enabled:false })
@@ -151,7 +152,7 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
     }
   }
 
-  const tabs = ['kids', 'chores', 'habits', 'rewards', 'bounties', 'points', 'settings', 'log']
+  const tabs = ['kids', 'chores', 'history', 'habits', 'rewards', 'bounties', 'points', 'settings', 'log']
 
   return (
     <div>
@@ -347,6 +348,10 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
               <button onClick={addChore} style={addBtnStyle}>Add Chore</button>
             </div>
           </div>
+        )}
+
+        {tab === 'history' && (
+          <BackfillPanel kids={kids} adminPin={adminPin} formatPoints={formatPoints} onRefresh={onRefresh} showToast={showToast} />
         )}
 
         {tab === 'habits' && (
@@ -608,12 +613,17 @@ export default function AdminView({ kids, allChores, rewards, requests, suggesti
                         <div style={{ fontSize:15, color:'var(--cb-text-muted)', marginTop:2 }}>{r.kid_name} · {formatPoints(r.reward_points)}</div>
                       </div>
                     </div>
+                    {r.balance_after < 0 && (
+                      <div style={{ marginBottom:12, padding:'10px 12px', background:'#BA751715', border:'1px solid #BA751766', borderRadius:8, fontSize:15, color:'#BA7517', fontWeight:600 }}>
+                        ⚠️ Claimed on credit — puts {r.kid_name} in debt ({formatPoints(r.balance_after)})
+                      </div>
+                    )}
                     <div style={{ display:'flex', gap:10 }}>
                       <button onClick={async () => { await acknowledgeRequest(r.id); onRefresh(); showToast('Prize handed out!') }}
                         style={{ flex:1, padding:'12px 0', background:'#1D9E75', border:'none', borderRadius:8, color:'#fff', fontSize:16, cursor:'pointer', fontWeight:700 }}>
                         ✓ Prize given
                       </button>
-                      <button onClick={async () => { await rejectRequest(r.id); onRefresh(); showToast('Request rejected') }}
+                      <button onClick={async () => { const res = await rejectRequest(r.id); onRefresh(); showToast(res.ok ? `Request rejected, ${formatPoints(res.points_refunded)} refunded to ${r.kid_name}` : (res.error || 'Could not reject')) }}
                         style={{ flex:1, padding:'12px 0', background:'var(--cb-surface)', border:'1px solid #E24B4A', borderRadius:8, color:'#E24B4A', fontSize:16, cursor:'pointer', fontWeight:700 }}>
                         ✕ Reject
                       </button>

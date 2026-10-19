@@ -11,8 +11,9 @@ export const getAllChores = () => fetch(`${BASE}/chores/all`).then(r => r.json()
 export const createChore = (data) => fetch(`${BASE}/chores`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
 export const updateChore = (id, data) => fetch(`${BASE}/chores/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r=>r.json())
 export const deleteChore = (id) => fetch(`${BASE}/chores/${id}`, { method:'DELETE' }).then(r=>r.json())
-export const completeChore = (id, date) => fetch(`${BASE}/chores/${id}/complete${date ? `?date=${date}` : ''}`, { method:'POST' }).then(r=>r.json())
-export const uncompleteChore = (id, date) => fetch(`${BASE}/chores/${id}/complete${date ? `?date=${date}` : ''}`, { method:'DELETE' }).then(r=>r.json())
+// Passing the admin PIN lets a parent backfill further back than the kids' edit window.
+export const completeChore = (id, date, pin) => fetch(`${BASE}/chores/${id}/complete${date ? `?date=${date}` : ''}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pin }) }).then(r=>r.json())
+export const uncompleteChore = (id, date, pin) => fetch(`${BASE}/chores/${id}/complete${date ? `?date=${date}` : ''}`, { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ pin }) }).then(r=>r.json())
 
 export const getMasteredChores = () => fetch(`${BASE}/chores/mastered`).then(r => r.json())
 export const getDeadChores = () => fetch(`${BASE}/chores/dead`).then(r => r.json())

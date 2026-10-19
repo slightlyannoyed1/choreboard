@@ -5,3 +5,5 @@ client/dist
 server/data
 *.db
 .env
+.dev-data
+scripts
